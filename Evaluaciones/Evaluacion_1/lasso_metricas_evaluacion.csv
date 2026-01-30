@@ -1,0 +1,2 @@
+alpha_optimo,mae_log,rmse_log,r2_log,mae_euro,rmse_euro,r2_euro,mape,n_variables_totales,n_variables_seleccionadas,porcentaje_eliminado,train_samples,test_samples
+1e-05,0.7563714051365101,0.9527299172737964,0.4671454376349291,150.13102164958912,355.785694268297,0.31942543336907914,111.39619746106662,33,30,9.090909090909092,6173,1544
