@@ -1,0 +1,47 @@
+{
+    "features": [
+        "category",
+        "market_tier",
+        "condition",
+        "is_premium_brand",
+        "tech_generation",
+        "ram_gb",
+        "storage_gb",
+        "size_value",
+        "performance_value",
+        "resolution_standard",
+        "cpu_gpu_tier",
+        "connectivity",
+        "brand",
+        "pack_count",
+        "confidence",
+        "product_rating",
+        "is_best_seller",
+        "is_sponsored",
+        "buy_box_availability",
+        "sustainability_tags",
+        "has_coupon",
+        "discount_percentage",
+        "log_purchased_last_month",
+        "log_total_reviews"
+    ],
+    "cat_features_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        9,
+        10,
+        11,
+        12,
+        16,
+        17
+    ],
+    "target_category": "Laptops & Chromebooks",
+    "metrics_test": {
+        "R2": 0.7208,
+        "MAPE": 23.77,
+        "RMSE": 394.43
+    }
+}
