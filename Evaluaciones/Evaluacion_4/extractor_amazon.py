@@ -9,7 +9,7 @@ import random
 
 # --- 1. CONFIGURACIÓN ---
 # Reemplaza con tu API KEY real
-API_KEY = "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" 
+API_KEY = "" 
 INPUT_FILE = "Datasets_fragmentados/parte1_diego.csv"  
 OUTPUT_FILE = "amazon_specs_enriched_final.csv"
 CHECKPOINT_INTERVAL = 10  # Guarda cada 10 productos
