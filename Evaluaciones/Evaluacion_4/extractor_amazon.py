@@ -9,8 +9,8 @@ import random
 
 # --- 1. CONFIGURACIÓN ---
 # Reemplaza con tu API KEY real
-API_KEY = "" 
-INPUT_FILE = "ev3_productos.csv"  
+API_KEY = "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" 
+INPUT_FILE = "Datasets_fragmentados/parte1_diego.csv"  
 OUTPUT_FILE = "amazon_specs_enriched_final.csv"
 CHECKPOINT_INTERVAL = 10  # Guarda cada 10 productos
 
@@ -57,7 +57,8 @@ If there is a real doubt between a category and Out of Scope, choose Out of Scop
 STEP 1 — Mobile Devices: 
 Main devices with a mobile screen/OS: Smartphones, tablets, e-readers, smartwatches, fitness bands. 
 GPS Navigators (for cars, drones, and any electronic product) should go here.
-EXCLUDE: Accessories “for iPhone/iPad/Galaxy” (these go to Accessories). 
+EXCLUDE: If it says 'for iPhone' AND the product is PASSIVE (cases, cables, screen protectors), it is an ACCESSORY. If the product is an electronic device with its own logic (AirPods, AirTags), follow its primary category (Audio or Smart Home). 
+EXCLUDE: Tracking tags or Bluetooth trackers (these go to Networking & Smart Home).
 
 STEP 2 — Computers & Gaming: 
 Complete computers and gaming/VR: 
@@ -82,6 +83,7 @@ Home Audio/AV and conferencing:
 
 STEP 6 — Networking & Smart Home (EXCLUDING UPS/sonar/radar): 
 - Routers, mesh systems, switches, PoE injectors, sensors, door/window alarms, video doorbells, etc.
+- Include Airtags and similar products.
 Explicitly EXCLUDE: UPS/SAI, heavy racks, sonars/radars (see Out of Scope), TV antennas if there is no smart-home functionality (if doubtful, Accessories/Displays depending on the accessory type). 
 
 STEP 7 — Office, Printing & Power: 
@@ -163,11 +165,12 @@ Allowed Subtypes: keyboard, mouse, trackpad, mousepad, drawing_tablet, barcode_s
 * Retail/Other (barcode_scanner, audio_adapter, external_fan): Extract scan_engine (1D, 2D_QR) and interface_type (USB-A, USB-C, 3.5mm).
 
 ### 4. Networking & Smart Home
-Allowed Subtypes: router, mesh_system, switch, poe_injector, smart_sensor, smart_alarm, video_doorbell, wifi_adapter, access_point, range_extender, hub_bridge.
+Allowed Subtypes: router, mesh_system, switch, poe_injector, smart_sensor, smart_alarm, video_doorbell, wifi_adapter, access_point, range_extender, hub_bridge, smart tag.
 
 * Infrastructure (router, mesh_system, access_point, wifi_adapter, range_extender): Extract wifi_standard (WiFi_5_AC to WiFi_7_BE), speed_class (AX1800, AX3000, BE19000), node_count, and frequency_bands (Dual-Band, Tri-Band, Quad-Band).
 * Switches (switch, poe_injector): Extract port_count, has_poe (Bool), and multi_gig_ports (2.5G, 10G).
 * Smart Home (video_doorbell, smart_sensor, smart_alarm, hub_bridge): Extract power_source (Battery, Wired), smart_protocol (WiFi, Zigbee, Z-Wave, Matter), and is_outdoor (Bool).
+* INCLUDE: Tracking tags like Apple AirTag, Tile, or Galaxy SmartTag as 'smart_tag'.
 
 ### 5. Displays & Mounting
 Allowed Subtypes: tv, monitor, projector, digital_signage, mount_arm, mount_wall, mount_ceiling, mount_stand.
