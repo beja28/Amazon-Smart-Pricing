@@ -1,0 +1,110 @@
+artifact_path: mlflow-artifacts:/14/models/m-08833d22cbac4a5f8ec37341b4d5a08f/artifacts
+flavors:
+  lightgbm:
+    code: null
+    data: model.pkl
+    lgb_version: 4.6.0
+    model_class: lightgbm.sklearn.LGBMRegressor
+    serialization_format: cloudpickle
+    skops_trusted_types: null
+  python_function:
+    data: model.pkl
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.lightgbm
+    python_version: 3.13.2
+is_signature_from_type_hint: false
+mlflow_version: 3.9.0
+model_id: m-08833d22cbac4a5f8ec37341b4d5a08f
+model_size_bytes: 2073196
+model_uuid: m-08833d22cbac4a5f8ec37341b4d5a08f
+prompts: null
+run_id: 0bee090f7f41452ca684629c42653705
+signature:
+  inputs: '[{"type": "string", "name": "category", "required": true}, {"type": "string",
+    "name": "subtype", "required": true}, {"type": "string", "name": "market_tier",
+    "required": true}, {"type": "string", "name": "condition", "required": true},
+    {"type": "boolean", "name": "is_premium_brand", "required": true}, {"type": "string",
+    "name": "tech_generation", "required": true}, {"type": "string", "name": "brand",
+    "required": true}, {"type": "double", "name": "confidence", "required": true},
+    {"type": "any", "name": "printer_tech", "required": false}, {"type": "boolean",
+    "name": "is_color", "required": false}, {"type": "any", "name": "is_multifunction",
+    "required": false}, {"type": "any", "name": "paper_size_max", "required": false},
+    {"type": "double", "name": "ppm", "required": false}, {"type": "double", "name":
+    "pack_count", "required": false}, {"type": "any", "name": "is_xl", "required":
+    false}, {"type": "double", "name": "ups_capacity_value", "required": false}, {"type":
+    "string", "name": "ups_capacity_unit", "required": false}, {"type": "boolean",
+    "name": "is_rackmount", "required": false}, {"type": "double", "name": "rack_u",
+    "required": false}, {"type": "double", "name": "power_capacity_value", "required":
+    false}, {"type": "string", "name": "power_capacity_unit", "required": false},
+    {"type": "any", "name": "audio_channels", "required": false}, {"type": "double",
+    "name": "total_power_w", "required": false}, {"type": "any", "name": "has_dolby_atmos",
+    "required": false}, {"type": "any", "name": "has_subwoofer", "required": false},
+    {"type": "any", "name": "has_anc", "required": false}, {"type": "string", "name":
+    "form_factor", "required": false}, {"type": "string", "name": "mic_type", "required":
+    false}, {"type": "any", "name": "audio_resolution", "required": false}, {"type":
+    "any", "name": "video_output_res", "required": false}, {"type": "any", "name":
+    "switch_type", "required": false}, {"type": "double", "name": "dpi", "required":
+    false}, {"type": "boolean", "name": "has_screen", "required": false}, {"type":
+    "any", "name": "is_thunderbolt", "required": false}, {"type": "any", "name": "max_resolution",
+    "required": false}, {"type": "double", "name": "read_speed_mbs", "required": false},
+    {"type": "any", "name": "scan_engine", "required": false}, {"type": "any", "name":
+    "wifi_standard", "required": false}, {"type": "any", "name": "speed_class", "required":
+    false}, {"type": "double", "name": "node_count", "required": false}, {"type":
+    "any", "name": "frequency_bands", "required": false}, {"type": "any", "name":
+    "has_poe", "required": false}, {"type": "double", "name": "multi_gig_ports", "required":
+    false}, {"type": "any", "name": "power_source", "required": false}, {"type": "any",
+    "name": "smart_protocol", "required": false}, {"type": "any", "name": "is_outdoor",
+    "required": false}, {"type": "double", "name": "screen_size_in", "required": false},
+    {"type": "any", "name": "resolution_standard", "required": false}, {"type": "any",
+    "name": "panel_tech", "required": false}, {"type": "double", "name": "refresh_rate_hz",
+    "required": false}, {"type": "any", "name": "is_smart", "required": false}, {"type":
+    "any", "name": "mount_type", "required": false}, {"type": "any", "name": "adjustment_type",
+    "required": false}, {"type": "double", "name": "num_screens", "required": false},
+    {"type": "double", "name": "max_weight_kg", "required": false}, {"type": "any",
+    "name": "is_heavy_duty", "required": false}, {"type": "any", "name": "sensor_format",
+    "required": false}, {"type": "any", "name": "max_video_res", "required": false},
+    {"type": "any", "name": "is_body_only", "required": false}, {"type": "any", "name":
+    "mount_system", "required": false}, {"type": "double", "name": "megapixels", "required":
+    false}, {"type": "any", "name": "is_pro_line", "required": false}, {"type": "any",
+    "name": "focal_range", "required": false}, {"type": "double", "name": "max_aperture_f",
+    "required": false}, {"type": "any", "name": "is_kit", "required": false}, {"type":
+    "any", "name": "component_series", "required": false}, {"type": "double", "name":
+    "vram_gb", "required": false}, {"type": "any", "name": "has_x3d", "required":
+    false}, {"type": "double", "name": "ram_gb", "required": false}, {"type": "double",
+    "name": "storage_gb", "required": false}, {"type": "any", "name": "tech_gen",
+    "required": false}, {"type": "double", "name": "power_wattage", "required": false},
+    {"type": "any", "name": "efficiency_rating", "required": false}, {"type": "any",
+    "name": "chipset", "required": false}, {"type": "any", "name": "is_aio", "required":
+    false}, {"type": "any", "name": "is_gaming", "required": false}, {"type": "any",
+    "name": "platform_family", "required": false}, {"type": "any", "name": "is_digital_edition",
+    "required": false}, {"type": "double", "name": "nas_bays", "required": false},
+    {"type": "string", "name": "model_name", "required": false}, {"type": "string",
+    "name": "cellular_type", "required": false}, {"type": "boolean", "name": "has_stylus",
+    "required": false}, {"type": "double", "name": "case_size_mm", "required": false},
+    {"type": "any", "name": "is_rugged", "required": false}, {"type": "any", "name":
+    "is_specialized", "required": false}, {"type": "any", "name": "gps_activity",
+    "required": false}, {"type": "boolean", "name": "has_touchscreen", "required":
+    false}, {"type": "double", "name": "cable_length_m", "required": false}, {"type":
+    "string", "name": "interface_type", "required": false}, {"type": "any", "name":
+    "is_braided", "required": false}, {"type": "any", "name": "material", "required":
+    false}, {"type": "string", "name": "brand_compatibility", "required": false},
+    {"type": "any", "name": "is_active", "required": false}, {"type": "any", "name":
+    "is_original", "required": false}, {"type": "string", "name": "connector_gender",
+    "required": false}, {"type": "boolean", "name": "is_wireless", "required": false},
+    {"type": "double", "name": "port_count", "required": false}, {"type": "any", "name":
+    "storage_type", "required": false}, {"type": "double", "name": "pd_wattage", "required":
+    false}, {"type": "boolean", "name": "case_keyboard", "required": true}, {"type":
+    "double", "name": "product_rating", "required": true}, {"type": "string", "name":
+    "is_best_seller", "required": true}, {"type": "string", "name": "is_sponsored",
+    "required": true}, {"type": "long", "name": "buy_box_availability", "required":
+    true}, {"type": "long", "name": "sustainability_tags", "required": true}, {"type":
+    "long", "name": "has_coupon", "required": true}, {"type": "double", "name": "discount_percentage",
+    "required": true}, {"type": "double", "name": "log_purchased_last_month", "required":
+    true}, {"type": "double", "name": "log_total_reviews", "required": true}, {"type":
+    "string", "name": "brand_subtype", "required": true}]'
+  outputs: '[{"type": "tensor", "tensor-spec": {"dtype": "float64", "shape": [-1]}}]'
+  params: null
+type_hint_from_example: false
+utc_time_created: '2026-02-17 18:22:45.961355'
