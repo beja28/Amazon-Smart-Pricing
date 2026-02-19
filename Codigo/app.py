@@ -1761,7 +1761,6 @@ if st.session_state.producto_seleccionado_idx is not None:
             # más las columnas derivadas del dashboard
             # ----------------------------------------------------------
             COLS_EXCLUIR = {
-                'original_title',    # texto libre, no es feature del modelo
                 'product_image_url', # URL, no es feature del modelo
                 'log_original_price',# TARGET — nunca enviarlo
                 'precio_real',       # columna derivada del dashboard
@@ -1787,7 +1786,7 @@ if st.session_state.producto_seleccionado_idx is not None:
 
             with st.spinner("Analizando mercado y competencia..."):
                 try:
-                    response = requests.post(API_URL, json=payload)
+                    response = requests.post(API_URL, json=payload, timeout=15)
 
                     if response.status_code == 200:
                         data_api        = response.json()

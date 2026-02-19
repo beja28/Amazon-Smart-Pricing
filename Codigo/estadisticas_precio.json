@@ -1,0 +1,754 @@
+{
+    "Accessories|adapter|Mainstream|False": {
+        "mediana_log": 3.017490653741537,
+        "mad_log": 0.3791478650641471
+    },
+    "Accessories|adapter|Mainstream|True": {
+        "mediana_log": 3.5533460588187404,
+        "mad_log": 0.3919182803892074
+    },
+    "Accessories|cable|Mainstream|False": {
+        "mediana_log": 2.5922455587383557,
+        "mad_log": 0.297570489224086
+    },
+    "Accessories|cable|Mainstream|True": {
+        "mediana_log": 2.9947317732204075,
+        "mad_log": 0.22276824637454462
+    },
+    "Accessories|mount_small|Mainstream|False": {
+        "mediana_log": 3.1350593387750902,
+        "mad_log": 0.2899905025968952
+    },
+    "Accessories|mount_small|Mainstream|True": {
+        "mediana_log": 3.5201649007261984,
+        "mad_log": 0.19316323379004796
+    },
+    "Accessories|protection_case|Mainstream|False": {
+        "mediana_log": 3.2577118486533987,
+        "mad_log": 0.45561628586284764
+    },
+    "Accessories|protection_case|Mainstream|True": {
+        "mediana_log": 3.931629535067065,
+        "mad_log": 0.46269615519383356
+    },
+    "Accessories|remote_control|Mainstream|False": {
+        "mediana_log": 3.541249137109912,
+        "mad_log": 0.32277339226305113
+    },
+    "Accessories|remote_control|Mainstream|True": {
+        "mediana_log": 3.433664571799657,
+        "mad_log": 0.4892255926332165
+    },
+    "Accessories|screen_protector|Mainstream|False": {
+        "mediana_log": 2.9168642863933183,
+        "mad_log": 0.24835827504885022
+    },
+    "Accessories|screen_protector|Mainstream|True": {
+        "mediana_log": 3.432372999130605,
+        "mad_log": 0.1746611504772062
+    },
+    "Accessories|strap_grip|Mainstream|False": {
+        "mediana_log": 3.0440461338325417,
+        "mad_log": 0.5391949882583984
+    },
+    "Accessories|stylus|Mainstream|False": {
+        "mediana_log": 3.618188713491167,
+        "mad_log": 0.3126560461775667
+    },
+    "Accessories|stylus|Mainstream|True": {
+        "mediana_log": 4.303107282670626,
+        "mad_log": 0.32916274255727296
+    },
+    "Audio & Media Systems|audio_interface|Mainstream|False": {
+        "mediana_log": 5.136327708726,
+        "mad_log": 0.1270933955453728
+    },
+    "Audio & Media Systems|audio_interface|Mainstream|True": {
+        "mediana_log": 5.017213609456379,
+        "mad_log": 0.4699228357206975
+    },
+    "Audio & Media Systems|blu_ray_player|Mainstream|False": {
+        "mediana_log": 4.186624469179829,
+        "mad_log": 0.5387038876899386
+    },
+    "Audio & Media Systems|blu_ray_player|Mainstream|True": {
+        "mediana_log": 5.349245809101099,
+        "mad_log": 0.3234522524576642
+    },
+    "Audio & Media Systems|earbuds|Mainstream|False": {
+        "mediana_log": 3.7133281345162463,
+        "mad_log": 0.4855137352742347
+    },
+    "Audio & Media Systems|earbuds|Mainstream|True": {
+        "mediana_log": 4.844187086458591,
+        "mad_log": 0.4541302800894451
+    },
+    "Audio & Media Systems|earbuds|Premium|True": {
+        "mediana_log": 5.147436335588401,
+        "mad_log": 0.34952695067344486
+    },
+    "Audio & Media Systems|headphones|Mainstream|False": {
+        "mediana_log": 4.110709916308365,
+        "mad_log": 0.646537735484821
+    },
+    "Audio & Media Systems|headphones|Mainstream|True": {
+        "mediana_log": 5.075173815233827,
+        "mad_log": 0.4601523131953611
+    },
+    "Audio & Media Systems|headphones|Premium|True": {
+        "mediana_log": 6.107022887742255,
+        "mad_log": 0.17677318009873355
+    },
+    "Audio & Media Systems|mic_accessory|Mainstream|False": {
+        "mediana_log": 3.176871878883273,
+        "mad_log": 0.2430829176877165
+    },
+    "Audio & Media Systems|mic_accessory|Mainstream|True": {
+        "mediana_log": 4.560591142590124,
+        "mad_log": 0.3145298418194331
+    },
+    "Audio & Media Systems|microphone|Mainstream|False": {
+        "mediana_log": 4.344291271070976,
+        "mad_log": 0.6056287355905838
+    },
+    "Audio & Media Systems|microphone|Mainstream|True": {
+        "mediana_log": 5.075173815233827,
+        "mad_log": 0.4462871026284194
+    },
+    "Audio & Media Systems|receiver|Mainstream|False": {
+        "mediana_log": 5.017081132804613,
+        "mad_log": 0.3602513134534977
+    },
+    "Audio & Media Systems|receiver|Mainstream|True": {
+        "mediana_log": 6.152740396093412,
+        "mad_log": 0.5062548104138167
+    },
+    "Audio & Media Systems|soundbar|Mainstream|False": {
+        "mediana_log": 4.875120984409557,
+        "mad_log": 0.3636015886955075
+    },
+    "Audio & Media Systems|soundbar|Mainstream|True": {
+        "mediana_log": 5.674793383895009,
+        "mad_log": 0.6699509174325278
+    },
+    "Audio & Media Systems|speaker|Mainstream|False": {
+        "mediana_log": 4.510309904964132,
+        "mad_log": 0.5984869195386535
+    },
+    "Audio & Media Systems|speaker|Mainstream|True": {
+        "mediana_log": 5.147436335588401,
+        "mad_log": 0.5596407060172295
+    },
+    "Audio & Media Systems|speaker|Premium|True": {
+        "mediana_log": 5.831853151340319,
+        "mad_log": 0.08432195672594833
+    },
+    "Audio & Media Systems|subwoofer|Mainstream|False": {
+        "mediana_log": 5.141605075260502,
+        "mad_log": 0.1616500803171581
+    },
+    "Audio & Media Systems|subwoofer|Mainstream|True": {
+        "mediana_log": 5.438079308923196,
+        "mad_log": 0.2520351848579452
+    },
+    "Audio & Media Systems|turntable|Mainstream|False": {
+        "mediana_log": 5.348217409086625,
+        "mad_log": 0.3364212136097908
+    },
+    "Audio & Media Systems|turntable|Mainstream|True": {
+        "mediana_log": 5.857933154483459,
+        "mad_log": 0.15415067982725805
+    },
+    "Cameras, Photography & Video|action_cam|Mainstream|False": {
+        "mediana_log": 5.989793946808351,
+        "mad_log": 0.13740357902510514
+    },
+    "Cameras, Photography & Video|action_cam|Mainstream|True": {
+        "mediana_log": 6.08893149033419,
+        "mad_log": 0.38514901567798887
+    },
+    "Cameras, Photography & Video|cinema_camera|Mainstream|True": {
+        "mediana_log": 7.16703787691222,
+        "mad_log": 0.16761540940425856
+    },
+    "Cameras, Photography & Video|cinema_camera|Premium|True": {
+        "mediana_log": 8.131530710604252,
+        "mad_log": 0.1869676099000852
+    },
+    "Cameras, Photography & Video|digital_camera|Mainstream|False": {
+        "mediana_log": 5.017213609456379,
+        "mad_log": 0.1420926250468213
+    },
+    "Cameras, Photography & Video|digital_camera|Mainstream|True": {
+        "mediana_log": 6.514026348966544,
+        "mad_log": 0.33548321542939874
+    },
+    "Cameras, Photography & Video|drone|Mainstream|True": {
+        "mediana_log": 6.907755278982137,
+        "mad_log": 0.578574432684086
+    },
+    "Cameras, Photography & Video|gimbal_tripod|Mainstream|False": {
+        "mediana_log": 5.252221070655064,
+        "mad_log": 0.2692398472071824
+    },
+    "Cameras, Photography & Video|gimbal_tripod|Mainstream|True": {
+        "mediana_log": 6.109225360295226,
+        "mad_log": 0.8901879830835187
+    },
+    "Cameras, Photography & Video|instant_camera|Mainstream|False": {
+        "mediana_log": 5.081342251254203,
+        "mad_log": 0.11687849875554868
+    },
+    "Cameras, Photography & Video|lens|Mainstream|False": {
+        "mediana_log": 5.264051324143887,
+        "mad_log": 0.23652244266537048
+    },
+    "Cameras, Photography & Video|lens|Mainstream|True": {
+        "mediana_log": 6.756276198979989,
+        "mad_log": 0.667180849489478
+    },
+    "Cameras, Photography & Video|lens|Premium|True": {
+        "mediana_log": 7.243512974665482,
+        "mad_log": 0.40520298178560576
+    },
+    "Cameras, Photography & Video|light|Mainstream|False": {
+        "mediana_log": 3.8037355443916847,
+        "mad_log": 0.2970084207035397
+    },
+    "Cameras, Photography & Video|mirrorless_dslr|Mainstream|True": {
+        "mediana_log": 7.396917946111868,
+        "mad_log": 0.42750799256270966
+    },
+    "Cameras, Photography & Video|mirrorless_dslr|Premium|True": {
+        "mediana_log": 8.232971790593437,
+        "mad_log": 0.05
+    },
+    "Cameras, Photography & Video|monitor|Mainstream|False": {
+        "mediana_log": 5.1298987149230735,
+        "mad_log": 0.06854306619770689
+    },
+    "Cameras, Photography & Video|photo_flash|Mainstream|False": {
+        "mediana_log": 5.560681631015528,
+        "mad_log": 0.30007610201600077
+    },
+    "Cameras, Photography & Video|photo_flash|Mainstream|True": {
+        "mediana_log": 5.393627546352362,
+        "mad_log": 0.4054651081081637
+    },
+    "Cameras, Photography & Video|security_cam|Mainstream|False": {
+        "mediana_log": 4.6150215020384655,
+        "mad_log": 0.7356648015629714
+    },
+    "Cameras, Photography & Video|security_cam|Mainstream|True": {
+        "mediana_log": 5.1647859739235145,
+        "mad_log": 0.47232236746469347
+    },
+    "Cameras, Photography & Video|tripod|Mainstream|False": {
+        "mediana_log": 3.737431494696102,
+        "mad_log": 0.6933853608635601
+    },
+    "Cameras, Photography & Video|tripod|Mainstream|True": {
+        "mediana_log": 4.6150215020384655,
+        "mad_log": 0.2525129484171167
+    },
+    "Cameras, Photography & Video|video_conf_system|Mainstream|False": {
+        "mediana_log": 6.9085910800293435,
+        "mad_log": 1.1877969771458727
+    },
+    "Cameras, Photography & Video|video_conf_system|Mainstream|True": {
+        "mediana_log": 7.24493440855279,
+        "mad_log": 0.7068090566698659
+    },
+    "Cameras, Photography & Video|webcam|Mainstream|False": {
+        "mediana_log": 4.077367938014984,
+        "mad_log": 0.6437033662153269
+    },
+    "Cameras, Photography & Video|webcam|Mainstream|True": {
+        "mediana_log": 4.646504049481068,
+        "mad_log": 0.3839650274297739
+    },
+    "Computers & Gaming|all_in_one|Mainstream|False": {
+        "mediana_log": 6.582171371851704,
+        "mad_log": 0.306404691495862
+    },
+    "Computers & Gaming|chromebook|Mainstream|False": {
+        "mediana_log": 5.556789450915541,
+        "mad_log": 0.1631619045631787
+    },
+    "Computers & Gaming|chromebook|Mainstream|True": {
+        "mediana_log": 5.521460917862246,
+        "mad_log": 0.0857757770214036
+    },
+    "Computers & Gaming|console|Mainstream|False": {
+        "mediana_log": 5.057923483758988,
+        "mad_log": 0.3583567621213608
+    },
+    "Computers & Gaming|console|Mainstream|True": {
+        "mediana_log": 5.623836984479113,
+        "mad_log": 0.22567428296136072
+    },
+    "Computers & Gaming|desktop|Mainstream|False": {
+        "mediana_log": 5.869155660220199,
+        "mad_log": 0.4376194498859389
+    },
+    "Computers & Gaming|desktop|Premium|True": {
+        "mediana_log": 7.741094744089373,
+        "mad_log": 0.2450029513996812
+    },
+    "Computers & Gaming|laptop|Mainstream|False": {
+        "mediana_log": 6.302592139833081,
+        "mad_log": 0.3026176541185319
+    },
+    "Computers & Gaming|laptop|Mainstream|True": {
+        "mediana_log": 6.746388626534571,
+        "mad_log": 0.4237309169150567
+    },
+    "Computers & Gaming|laptop|Premium|True": {
+        "mediana_log": 7.619538309379699,
+        "mad_log": 0.2620761166544008
+    },
+    "Computers & Gaming|mini_pc|Mainstream|False": {
+        "mediana_log": 5.828945617610208,
+        "mad_log": 0.5025754366201367
+    },
+    "Computers & Gaming|mini_pc|Mainstream|True": {
+        "mediana_log": 5.3471075307174685,
+        "mad_log": 0.217208815794395
+    },
+    "Computers & Gaming|mini_pc|Premium|True": {
+        "mediana_log": 5.817021870262712,
+        "mad_log": 0.05
+    },
+    "Computers & Gaming|nas|Mainstream|False": {
+        "mediana_log": 6.255730847711197,
+        "mad_log": 0.3804069357380291
+    },
+    "Computers & Gaming|nas|Mainstream|True": {
+        "mediana_log": 6.685848462595922,
+        "mad_log": 0.22283460642096742
+    },
+    "Computers & Gaming|vr_headset|Mainstream|True": {
+        "mediana_log": 5.643834967499164,
+        "mad_log": 0.14550493127222763
+    },
+    "Displays & Mounting|monitor|Mainstream|False": {
+        "mediana_log": 5.141605075260502,
+        "mad_log": 0.30248735542948335
+    },
+    "Displays & Mounting|monitor|Mainstream|True": {
+        "mediana_log": 6.107824348224177,
+        "mad_log": 0.4695052667122823
+    },
+    "Displays & Mounting|monitor|Premium|True": {
+        "mediana_log": 7.170119543449628,
+        "mad_log": 0.25642952894767657
+    },
+    "Displays & Mounting|mount_arm|Mainstream|False": {
+        "mediana_log": 4.51626909370882,
+        "mad_log": 0.8540984448260955
+    },
+    "Displays & Mounting|mount_arm|Mainstream|True": {
+        "mediana_log": 4.562940504277657,
+        "mad_log": 0.6313109692105923
+    },
+    "Displays & Mounting|mount_stand|Mainstream|False": {
+        "mediana_log": 4.021169725687715,
+        "mad_log": 0.3404987778723261
+    },
+    "Displays & Mounting|mount_wall|Mainstream|False": {
+        "mediana_log": 3.806440242853081,
+        "mad_log": 0.40557625009216336
+    },
+    "Displays & Mounting|projector|Mainstream|False": {
+        "mediana_log": 6.771155223595255,
+        "mad_log": 0.4329664206284467
+    },
+    "Displays & Mounting|projector|Mainstream|True": {
+        "mediana_log": 7.24493440855279,
+        "mad_log": 0.5615859785093917
+    },
+    "Displays & Mounting|tv|Mainstream|False": {
+        "mediana_log": 5.293254572205575,
+        "mad_log": 0.4890001468227414
+    },
+    "Displays & Mounting|tv|Mainstream|True": {
+        "mediana_log": 6.463199730396328,
+        "mad_log": 0.5638497062095795
+    },
+    "Displays & Mounting|tv|Premium|True": {
+        "mediana_log": 7.308178348396327,
+        "mad_log": 0.272128970606043
+    },
+    "Mobile Devices|fitness_band|Mainstream|False": {
+        "mediana_log": 4.317354771313298,
+        "mad_log": 0.2976667307251679
+    },
+    "Mobile Devices|fitness_band|Mainstream|True": {
+        "mediana_log": 4.9486889658772695,
+        "mad_log": 0.2497528152435109
+    },
+    "Mobile Devices|gps_navigator|Mainstream|True": {
+        "mediana_log": 5.707077041605631,
+        "mad_log": 0.40382188602797076
+    },
+    "Mobile Devices|smartphone|Mainstream|True": {
+        "mediana_log": 5.792159585273614,
+        "mad_log": 0.11887068295375514
+    },
+    "Mobile Devices|smartphone|Premium|True": {
+        "mediana_log": 6.345636360828596,
+        "mad_log": 0.09578853427410117
+    },
+    "Mobile Devices|smartwatch|Mainstream|False": {
+        "mediana_log": 4.662230804601177,
+        "mad_log": 0.5601993502731109
+    },
+    "Mobile Devices|smartwatch|Mainstream|True": {
+        "mediana_log": 5.525333406900808,
+        "mad_log": 0.2811066186500706
+    },
+    "Mobile Devices|smartwatch|Premium|True": {
+        "mediana_log": 6.51762418694101,
+        "mad_log": 0.4863408670882885
+    },
+    "Mobile Devices|tablet|Mainstream|False": {
+        "mediana_log": 5.231865999983306,
+        "mad_log": 0.2725954480838686
+    },
+    "Mobile Devices|tablet|Mainstream|True": {
+        "mediana_log": 5.754516150717052,
+        "mad_log": 0.823844224910391
+    },
+    "Mobile Devices|tablet|Premium|True": {
+        "mediana_log": 5.923587124704897,
+        "mad_log": 0.303186258987747
+    },
+    "Networking & Smart Home|access_point|Mainstream|False": {
+        "mediana_log": 4.5269690020004045,
+        "mad_log": 0.20069110364624354
+    },
+    "Networking & Smart Home|access_point|Mainstream|True": {
+        "mediana_log": 4.95134361618268,
+        "mad_log": 0.2546914633150785
+    },
+    "Networking & Smart Home|mesh_system|Mainstream|False": {
+        "mediana_log": 5.30325515557766,
+        "mad_log": 0.5115258996418777
+    },
+    "Networking & Smart Home|mesh_system|Mainstream|True": {
+        "mediana_log": 5.080563847560753,
+        "mad_log": 0.38787108766107226
+    },
+    "Networking & Smart Home|modem|Mainstream|False": {
+        "mediana_log": 5.135798437050262,
+        "mad_log": 0.5207769350117966
+    },
+    "Networking & Smart Home|modem|Mainstream|True": {
+        "mediana_log": 5.293053536872938,
+        "mad_log": 0.10009668598272725
+    },
+    "Networking & Smart Home|router|Mainstream|False": {
+        "mediana_log": 4.709440107163888,
+        "mad_log": 0.3151144169029898
+    },
+    "Networking & Smart Home|router|Mainstream|True": {
+        "mediana_log": 5.3518107389880365,
+        "mad_log": 0.3180701839924831
+    },
+    "Networking & Smart Home|smart_alarm|Mainstream|False": {
+        "mediana_log": 3.228826155721369,
+        "mad_log": 0.456862628875506
+    },
+    "Networking & Smart Home|smart_sensor|Mainstream|False": {
+        "mediana_log": 3.6482846283035935,
+        "mad_log": 0.401545440802888
+    },
+    "Networking & Smart Home|smart_tag|Mainstream|False": {
+        "mediana_log": 3.433664571799657,
+        "mad_log": 0.1759527231462581
+    },
+    "Networking & Smart Home|smart_tag|Mainstream|True": {
+        "mediana_log": 3.504407630292625,
+        "mad_log": 0.5160581486898728
+    },
+    "Networking & Smart Home|switch|Mainstream|False": {
+        "mediana_log": 4.2686989767658226,
+        "mad_log": 0.8229203281966437
+    },
+    "Networking & Smart Home|switch|Mainstream|True": {
+        "mediana_log": 5.991439546795477,
+        "mad_log": 0.5538239029263625
+    },
+    "Networking & Smart Home|video_doorbell|Mainstream|False": {
+        "mediana_log": 4.69475621632163,
+        "mad_log": 0.23580670990039154
+    },
+    "Networking & Smart Home|wifi_adapter|Mainstream|False": {
+        "mediana_log": 3.217674462752501,
+        "mad_log": 0.29107691944191516
+    },
+    "Networking & Smart Home|wifi_extender|Mainstream|False": {
+        "mediana_log": 4.705414207197323,
+        "mad_log": 0.6437857550325523
+    },
+    "Office, Printing & Power|battery|Mainstream|False": {
+        "mediana_log": 2.757699289481686,
+        "mad_log": 0.5375818494230755
+    },
+    "Office, Printing & Power|battery|Mainstream|True": {
+        "mediana_log": 3.49620448524049,
+        "mad_log": 0.5289686181203122
+    },
+    "Office, Printing & Power|calculator|Mainstream|False": {
+        "mediana_log": 3.5313946985171674,
+        "mad_log": 0.6735352232028826
+    },
+    "Office, Printing & Power|calculator|Mainstream|True": {
+        "mediana_log": 4.90527477843843,
+        "mad_log": 0.10536051565782678
+    },
+    "Office, Printing & Power|cd|Mainstream|False": {
+        "mediana_log": 3.1135153092103742,
+        "mad_log": 0.20989832456418922
+    },
+    "Office, Printing & Power|charger|Mainstream|False": {
+        "mediana_log": 3.494534527714235,
+        "mad_log": 0.39883331733001826
+    },
+    "Office, Printing & Power|charger|Mainstream|True": {
+        "mediana_log": 3.7760592701765754,
+        "mad_log": 0.4493996130958158
+    },
+    "Office, Printing & Power|folder|Mainstream|False": {
+        "mediana_log": 2.8326249356838407,
+        "mad_log": 0.17026969384376
+    },
+    "Office, Printing & Power|label_printer|Mainstream|False": {
+        "mediana_log": 4.186554031763358,
+        "mad_log": 0.45894979289556725
+    },
+    "Office, Printing & Power|printer|Mainstream|False": {
+        "mediana_log": 5.577673275572617,
+        "mad_log": 0.4188658676688872
+    },
+    "Office, Printing & Power|printer|Mainstream|True": {
+        "mediana_log": 5.83214973283763,
+        "mad_log": 0.5575197214495176
+    },
+    "Office, Printing & Power|printer_media|Mainstream|False": {
+        "mediana_log": 2.9047128751668225,
+        "mad_log": 0.7357638397189463
+    },
+    "Office, Printing & Power|rack_component|Mainstream|False": {
+        "mediana_log": 4.696107180980193,
+        "mad_log": 0.8251145251100396
+    },
+    "Office, Printing & Power|scanner|Mainstream|False": {
+        "mediana_log": 5.94277312806309,
+        "mad_log": 0.36894353210480624
+    },
+    "Office, Printing & Power|scanner|Mainstream|True": {
+        "mediana_log": 5.447121068044258,
+        "mad_log": 0.3976395414787355
+    },
+    "Office, Printing & Power|shredder|Mainstream|False": {
+        "mediana_log": 4.691347882229144,
+        "mad_log": 0.9070740767692307
+    },
+    "Office, Printing & Power|surge_protector|Mainstream|False": {
+        "mediana_log": 3.324682394302876,
+        "mad_log": 0.5564790585126014
+    },
+    "Office, Printing & Power|surge_protector|Mainstream|True": {
+        "mediana_log": 3.939054344479176,
+        "mad_log": 0.35581322238823576
+    },
+    "Office, Printing & Power|toner_ink|Mainstream|False": {
+        "mediana_log": 3.8625873308042245,
+        "mad_log": 0.5591361606039085
+    },
+    "Office, Printing & Power|toner_ink|Mainstream|True": {
+        "mediana_log": 4.862763897624428,
+        "mad_log": 0.7846934162733556
+    },
+    "Office, Printing & Power|ups|Mainstream|False": {
+        "mediana_log": 5.081093757744817,
+        "mad_log": 0.6872620776211731
+    },
+    "Office, Printing & Power|ups|Mainstream|True": {
+        "mediana_log": 5.707077041605631,
+        "mad_log": 0.38411584414483446
+    },
+    "PC Components (Core)|case|Mainstream|False": {
+        "mediana_log": 4.802643618399719,
+        "mad_log": 0.30058896760476417
+    },
+    "PC Components (Core)|case|Mainstream|True": {
+        "mediana_log": 5.278063637520769,
+        "mad_log": 0.12005381410444471
+    },
+    "PC Components (Core)|case_fan|Mainstream|False": {
+        "mediana_log": 3.822958251566873,
+        "mad_log": 0.5713674386940255
+    },
+    "PC Components (Core)|case_fan|Mainstream|True": {
+        "mediana_log": 4.663344750039164,
+        "mad_log": 0.13236314751422196
+    },
+    "PC Components (Core)|cpu|Mainstream|False": {
+        "mediana_log": 4.91228717107848,
+        "mad_log": 0.30711698509038854
+    },
+    "PC Components (Core)|cpu|Mainstream|True": {
+        "mediana_log": 5.660131310454803,
+        "mad_log": 0.3770302672658441
+    },
+    "PC Components (Core)|cpu|Premium|True": {
+        "mediana_log": 6.420852953944756,
+        "mad_log": 0.18314963156704822
+    },
+    "PC Components (Core)|cpu_cooler|Mainstream|False": {
+        "mediana_log": 4.652229471047802,
+        "mad_log": 0.32576320830620364
+    },
+    "PC Components (Core)|cpu_cooler|Mainstream|True": {
+        "mediana_log": 5.19794439240125,
+        "mad_log": 0.4021538468045085
+    },
+    "PC Components (Core)|gpu|Mainstream|False": {
+        "mediana_log": 5.602081919829862,
+        "mad_log": 0.42170459874024413
+    },
+    "PC Components (Core)|gpu|Mainstream|True": {
+        "mediana_log": 6.134677051181064,
+        "mad_log": 0.4733100787473079
+    },
+    "PC Components (Core)|gpu|Premium|True": {
+        "mediana_log": 6.985632566902618,
+        "mad_log": 0.4694542838684779
+    },
+    "PC Components (Core)|hdd_internal|Enterprise/Professional|True": {
+        "mediana_log": 5.602081919829862,
+        "mad_log": 0.05
+    },
+    "PC Components (Core)|hdd_internal|Mainstream|False": {
+        "mediana_log": 5.098951375144823,
+        "mad_log": 0.4839298731063577
+    },
+    "PC Components (Core)|hdd_internal|Mainstream|True": {
+        "mediana_log": 5.30325515557766,
+        "mad_log": 0.38710429874639996
+    },
+    "PC Components (Core)|motherboard|Mainstream|False": {
+        "mediana_log": 5.013924451776317,
+        "mad_log": 0.2736966051682854
+    },
+    "PC Components (Core)|motherboard|Mainstream|True": {
+        "mediana_log": 5.928145799490119,
+        "mad_log": 0.25591637970950876
+    },
+    "PC Components (Core)|psu|Mainstream|False": {
+        "mediana_log": 4.752408672109962,
+        "mad_log": 0.42180691942826876
+    },
+    "PC Components (Core)|psu|Mainstream|True": {
+        "mediana_log": 4.947695494322382,
+        "mad_log": 0.40411524466565485
+    },
+    "PC Components (Core)|psu|Premium|True": {
+        "mediana_log": 5.552571912887299,
+        "mad_log": 0.32687900406026316
+    },
+    "PC Components (Core)|ram|Mainstream|False": {
+        "mediana_log": 4.6036629164076555,
+        "mad_log": 0.3127114902695536
+    },
+    "PC Components (Core)|ram|Mainstream|True": {
+        "mediana_log": 5.0561821090522265,
+        "mad_log": 0.3783256119460754
+    },
+    "PC Components (Core)|ssd_internal|Mainstream|False": {
+        "mediana_log": 4.795707897553386,
+        "mad_log": 0.5331688755020911
+    },
+    "PC Components (Core)|ssd_internal|Mainstream|True": {
+        "mediana_log": 5.203963966981101,
+        "mad_log": 0.38405584660393766
+    },
+    "PC Components (Core)|thermal_paste|Mainstream|False": {
+        "mediana_log": 2.504483952387484,
+        "mad_log": 0.2351894670927006
+    },
+    "Peripherals & Input|barcode_scanner|Mainstream|False": {
+        "mediana_log": 5.117933930384341,
+        "mad_log": 0.24504694948941808
+    },
+    "Peripherals & Input|controller|Mainstream|False": {
+        "mediana_log": 4.110709916308365,
+        "mad_log": 0.3973817817921188
+    },
+    "Peripherals & Input|controller|Mainstream|True": {
+        "mediana_log": 4.686439600637978,
+        "mad_log": 0.4380872259365294
+    },
+    "Peripherals & Input|dock_hub|Mainstream|False": {
+        "mediana_log": 4.181868313650794,
+        "mad_log": 0.7119828553644187
+    },
+    "Peripherals & Input|dock_hub|Mainstream|True": {
+        "mediana_log": 5.068695306090792,
+        "mad_log": 0.3961346848767566
+    },
+    "Peripherals & Input|external_drive|Mainstream|False": {
+        "mediana_log": 3.721662883815931,
+        "mad_log": 0.7148126807006498
+    },
+    "Peripherals & Input|external_drive|Mainstream|True": {
+        "mediana_log": 4.60502016848509,
+        "mad_log": 0.8093139581540769
+    },
+    "Peripherals & Input|handheld_gaming|Mainstream|False": {
+        "mediana_log": 5.275385442853565,
+        "mad_log": 0.48310489706684256
+    },
+    "Peripherals & Input|keyboard|Mainstream|False": {
+        "mediana_log": 3.8284239815518326,
+        "mad_log": 0.4341150404994618
+    },
+    "Peripherals & Input|keyboard|Mainstream|True": {
+        "mediana_log": 5.0631250696462775,
+        "mad_log": 0.27805142071732547
+    },
+    "Peripherals & Input|mouse|Mainstream|False": {
+        "mediana_log": 3.2168738221975275,
+        "mad_log": 0.3842488865136868
+    },
+    "Peripherals & Input|mouse|Mainstream|True": {
+        "mediana_log": 4.3943256902608985,
+        "mad_log": 0.28361577395253335
+    },
+    "Peripherals & Input|mousepad|Mainstream|False": {
+        "mediana_log": 3.1563482078133465,
+        "mad_log": 0.6307306694032231
+    },
+    "Peripherals & Input|mousepad|Mainstream|True": {
+        "mediana_log": 3.9867327753779795,
+        "mad_log": 0.753362807320678
+    },
+    "Peripherals & Input|sd_card|Mainstream|False": {
+        "mediana_log": 3.2577118486533987,
+        "mad_log": 0.5503285365388924
+    },
+    "Peripherals & Input|sd_card|Mainstream|True": {
+        "mediana_log": 3.5969443639676513,
+        "mad_log": 0.6721023421396786
+    },
+    "Peripherals & Input|video_capture_card|Mainstream|False": {
+        "mediana_log": 4.6150215020384655,
+        "mad_log": 0.2600994823710918
+    },
+    "Peripherals & Input|video_capture_card|Mainstream|True": {
+        "mediana_log": 5.283152966028264,
+        "mad_log": 0.20181071477406132
+    }
+}
