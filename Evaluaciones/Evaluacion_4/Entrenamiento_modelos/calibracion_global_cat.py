@@ -12,10 +12,10 @@ warnings.filterwarnings('ignore')
 # --- CONFIGURACIÓN ---
 CSV_PATH = "../../../Datasets/evaluacion4.csv"
 # Asegúrate de que este path apunta a tu .pkl o .joblib
-PATH_MODELO_GLOBAL = "Modelos/modelo_general_lightgbm.pkl" 
-PATH_MODELO_OFFICE = "Modelos/Mobile_Devices/model_Mobile Devices_ALIGNED.cbm"
+PATH_MODELO_GLOBAL = "modelo_general_lightgbm.pkl" 
+PATH_MODELO_OFFICE = "model_Networking & Smart Home.cbm"
 
-TARGET_CATEGORY = "Mobile Devices"
+TARGET_CATEGORY = "Networking & Smart Home"
 TARGET_COL = 'log_original_price'
 
 # --- 1. FUNCIÓN DE PREPARACIÓN PARA CATBOOST (Especialista) ---
@@ -77,6 +77,7 @@ def calibrate_blending_common_ground():
     # 1. REPLICAR SPLIT GLOBAL (Obtener el 20% de Test)
     print("✂️  Replicando train_test_split (random_state=42)...")
     _, df_test_global = train_test_split(df_full, test_size=0.2, random_state=42)
+
 
     # 2. FILTRAR SOLO LA CATEGORÍA TARGET
     print(f"🔍 Filtrando categoría '{TARGET_CATEGORY}'...")

@@ -18,69 +18,81 @@ mlflow.set_experiment(EXPERIMENT_NAME)
 
 
 def optimizar_con_optuna(df, target_col='log_original_price'):
-    # --- 1. PREPARACIÓN IDÉNTICA ---
+    print("\n🔍 INICIANDO BÚSQUEDA DE HIPERPARÁMETROS CON OPTUNA...")
+    
+    # --- 1. PREPARACIÓN (Mismas columnas que en entrenamiento) ---
     cols_a_eliminar = [target_col, 'original_row_id', 'error_log', 'original_title', 'price']
-    X = df.drop(columns=[c for c in cols_a_eliminar if c in df.columns])
+    existing_cols = [c for c in cols_a_eliminar if c in df.columns]
+    X = df.drop(columns=existing_cols)
     y = df[target_col]
 
     cat_features = X.select_dtypes(include=['object', 'category']).columns.tolist()
     for col in cat_features:
         X[col] = X[col].astype('category')
 
-    # Split de 3 vías
+    # Split de 3 vías (Igual que en evaluación final)
     X_dev, X_test, y_dev, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     X_train, X_val, y_train, y_val = train_test_split(X_dev, y_dev, test_size=0.125, random_state=42)
 
     def objective(trial):
-        # 2. ESPACIO DE BÚSQUEDA DE HIPERPARÁMETROS
+        # 2. ESPACIO DE BÚSQUEDA DE HIPERPARÁMETROS (AJUSTADO PARA 6.5k ROWS)
         param = {
             'objective': 'regression',
             'metric': 'rmse',
             'verbosity': -1,
             'boosting_type': 'gbdt',
             'random_state': 42,
-            'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.1),
-            'num_leaves': trial.suggest_int('num_leaves', 20, 300),
-            'max_depth': trial.suggest_int('max_depth', 3, 12),
-            'feature_fraction': trial.suggest_float('feature_fraction', 0.4, 1.0),
-            'bagging_fraction': trial.suggest_float('bagging_fraction', 0.4, 1.0),
-            'bagging_freq': trial.suggest_int('bagging_freq', 1, 7),
-            'min_child_samples': trial.suggest_int('min_child_samples', 5, 100),
+            
+            # Tasa de aprendizaje (usamos escala logarítmica para buscar mejor)
+            'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.1, log=True),
+            
+            # Control de Complejidad (Reducido para evitar overfitting)
+            'max_depth': trial.suggest_int('max_depth', 4, 9),
+            'num_leaves': trial.suggest_int('num_leaves', 15, 128),
+            'min_child_samples': trial.suggest_int('min_child_samples', 15, 80),
+            
+            # Aleatoriedad para robustez
+            'feature_fraction': trial.suggest_float('feature_fraction', 0.5, 0.9),
+            'bagging_fraction': trial.suggest_float('bagging_fraction', 0.5, 0.9),
+            'bagging_freq': trial.suggest_int('bagging_freq', 1, 5),
+            
+            # REGULARIZACIÓN (NUEVO: Vital para datasets pequeños)
+            'reg_alpha': trial.suggest_float('reg_alpha', 1e-4, 10.0, log=True),  # L1
+            'reg_lambda': trial.suggest_float('reg_lambda', 1e-4, 10.0, log=True) # L2
         }
 
-        # 3. ENTRENAMIENTO RÁPIDO PARA OPTUNA
+        # Entrenamiento rápido para Optuna
         gbm = lgb.LGBMRegressor(**param, n_estimators=1000)
         gbm.fit(
             X_train, y_train,
             eval_set=[(X_val, y_val)],
-            callbacks=[lgb.early_stopping(stopping_rounds=50)]
+            callbacks=[lgb.early_stopping(stopping_rounds=30, verbose=False)] # Reducido a 30 para agilizar Optuna
         )
 
         preds = gbm.predict(X_val)
         mae_val = mean_absolute_error(np.expm1(y_val), np.expm1(preds))
         
-        return mae_val # Queremos minimizar el MAE en Euros
+        return mae_val
 
     # 4. EJECUTAR LA OPTIMIZACIÓN
     study = optuna.create_study(direction='minimize')
-    study.optimize(objective, n_trials=50) # Prueba con 50 o 100 intentos
+    study.optimize(objective, n_trials=30) # 30 intentos suele ser un buen balance
 
-    print("\n Mejores parámetros encontrados:", study.best_params)
+    print("\n✅ Mejores parámetros encontrados:", study.best_params)
     
-    # 5. ENTRENAR MODELO FINAL CON LOS MEJORES PARÁMETROS
-    modelo_final = lgb.LGBMRegressor(**study.best_params, n_estimators=2000)
-    modelo_final.fit(X_train, y_train, eval_set=[(X_val, y_val)], callbacks=[lgb.early_stopping(stopping_rounds=100)])
-    
-    return modelo_final, X_test, y_test
+    # IMPORTANTE: Ahora solo devolvemos el diccionario de parámetros. 
+    # El entrenamiento final lo hará la otra función para que quede logueado en MLflow.
+    return study.best_params
 
-def entrenar_modelo_precio_profesional(df, target_col='log_original_price'):
+
+def entrenar_modelo_precio_profesional(df, best_params, target_col='log_original_price'):
     """
-    Entrena usando Train/Val/Test para evitar data leakage por early stopping.
+    Entrena usando Train/Val/Test y registra en MLflow usando los parámetros de Optuna.
     """
-    with mlflow.start_run(nested=True):
-        print("--- 1. PREPARACIÓN DE DATOS ---")
+    with mlflow.start_run(run_name="LGBM_Optimizado_Final"):
+        print("\n--- 1. PREPARACIÓN DE DATOS (FINAL) ---")
         
-        # 1. Limpieza de columnas innecesarias
+        # 1. Limpieza de columnas
         cols_a_eliminar = [target_col, 'original_row_id', 'error_log', 'original_title', 'price']
         existing_cols = [c for c in cols_a_eliminar if c in df.columns]
         X = df.drop(columns=existing_cols)
@@ -91,13 +103,8 @@ def entrenar_modelo_precio_profesional(df, target_col='log_original_price'):
         for col in cat_features:
             X[col] = X[col].astype('category')
 
-        # --- 3. SPLIT DE 3 VÍAS (LA CLAVE) ---
-        # Paso A: Separar el TEST FINAL (20%). Este es SAGRADO.
-        # Usamos random_state=42 para que coincida con tus otros modelos.
+        # 3. SPLIT DE 3 VÍAS
         X_dev, X_test, y_dev, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-        
-        # Paso B: Del 80% restante (Dev), sacamos un trozo para VALIDACIÓN (Early Stopping).
-        # 0.125 de 0.80 es igual a 0.10 (10% del total).
         X_train, X_val, y_train, y_val = train_test_split(X_dev, y_dev, test_size=0.125, random_state=42)
         
         print(f"📊 Dimensiones del Split:")
@@ -105,34 +112,31 @@ def entrenar_modelo_precio_profesional(df, target_col='log_original_price'):
         print(f"   -> Val   (Early Stop):    {X_val.shape[0]} filas")
         print(f"   -> Test  (Eval Final):    {X_test.shape[0]} filas (Intocable)")
 
-        # 4. Configuración LightGBM
-        params = {
+        # 4. CONFIGURAR PARÁMETROS (INYECTAR OPTUNA)
+        # Tomamos los parámetros de Optuna y añadimos los fijos necesarios
+        params = best_params.copy()
+        params.update({
             'objective': 'regression',
             'metric': 'rmse',
-            'learning_rate': 0.0678632566746439,
-            'num_leaves': 251,
-            'max_depth': 7, 'feature_fraction': 0.9339257464617899,
-            'bagging_fraction': 0.7508640428820034,
-            'bagging_freq': 5,
-            'min_child_samples': 8,
             'verbosity': -1,
             'random_state': 42
-        }
+        })
 
         model = lgb.LGBMRegressor(**params, n_estimators=2000)
         
-        # 5. Entrenamiento
-        print("\n🚀 Entrenando modelo...")
-        # AQUÍ ESTÁ EL CAMBIO: Entrenamos con TRAIN, pero miramos VAL para parar.
-        # El TEST ni lo toca.
+        # En tu script de entrenamiento original
+        print(X_train.dtypes)
+        
+        # 5. Entrenamiento Final
+        print("\n🚀 Entrenando modelo final con mejores parámetros...")
         model.fit(
             X_train, y_train,
-            eval_set=[(X_val, y_val)], # <--- Usamos Validación, NO Test
+            eval_set=[(X_val, y_val)], 
             eval_metric='rmse',
             callbacks=[lgb.early_stopping(stopping_rounds=50)]
         )
 
-        # 6. Predicción en escala LOG sobre TEST (Datos nuevos)
+        # 6. Predicción en TEST (Datos nuevos)
         preds_log = model.predict(X_test)
 
         # --- TRANSFORMACIÓN A EUROS ---
@@ -143,37 +147,35 @@ def entrenar_modelo_precio_profesional(df, target_col='log_original_price'):
         mae_eur = mean_absolute_error(y_test_eur, preds_eur)
         r2_eur = r2_score(y_test_eur, preds_eur)
         rmse_eur = np.sqrt(mean_squared_error(y_test_eur, preds_eur))
-        # rmse = np.sqrt(mean_squared_error(y_val, preds_eur))
 
-
-        print(f"\n---  Resultados Honestos (Sobre Set de Test) ---")
+        print(f"\n--- 🏆 Resultados Honestos (Sobre Set de Test) ---")
         print(f"MAE:  {mae_eur:.2f}€")
         print(f"RMSE: {rmse_eur:.2f}€")
         print(f"R2:   {r2_eur:.4f}")
 
-        # Loggear métricas
+        # Loggear métricas en MLflow
         mlflow.log_params(params)
         mlflow.log_metric("MAE", mae_eur)
-        # mlflow.log_metric("val_rmse_log", rmse)
         mlflow.log_metric("rmse_euro", rmse_eur)
         mlflow.log_metric("val_r2_euro", r2_eur)
 
-        # Suponiendo que tu modelo se llama 'mi_modelo'
-        # nombre_archivo = 'modelo_lightgbm.pkl'
+        # Guardado del modelo
+        nombre_archivo = 'modelo_general_lightgbm.pkl'
+        with open(nombre_archivo, 'wb') as archivo:
+             pickle.dump(model, archivo)
 
-        # with open(nombre_archivo, 'wb') as archivo:
-        #     pickle.dump(model, archivo)
-
-        # print("¡Modelo guardado con éxito!")
+        print(f"💾 ¡Modelo guardado con éxito en '{nombre_archivo}'!")
         
-    
         return model, X_test
 
-# EJECUTAMOS LA FUNCIÓN
-# if _name_ == "_main_":
-    # Asegúrate de poner la ruta correcta a tu CSV
-csv_path = "../../../Datasets/evaluacion4.csv"
-print(f" Cargando {csv_path}...")
-df = pd.read_csv(csv_path)
-# mejor_modelo, X_test_final, y_test_final = optimizar_con_optuna(df)
-modelo_final, datos_test = entrenar_modelo_precio_profesional(df, target_col='log_original_price')
+# --- EJECUCIÓN PRINCIPAL ---
+if __name__ == "__main__":
+    csv_path = "../../../Datasets/evaluacion4.csv"
+    print(f"📂 Cargando {csv_path}...")
+    df = pd.read_csv(csv_path)
+    
+    # Paso 1: Sacar los mejores parámetros con Optuna
+    mejores_parametros = optimizar_con_optuna(df, target_col='log_original_price')
+    
+    # Paso 2: Pasarle esos parámetros al entrenamiento profesional
+    modelo_final, datos_test = entrenar_modelo_precio_profesional(df, mejores_parametros, target_col='log_original_price')

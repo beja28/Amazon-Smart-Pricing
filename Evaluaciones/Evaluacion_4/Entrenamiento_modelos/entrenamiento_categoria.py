@@ -29,7 +29,7 @@ def prepare_aligned_data(df_full, category_name):
     
     # 1. SPLIT GLOBAL (Crucial para alineación)
     print("✂️  Aplicando Split Global (random_state=42)...")
-    train_full, val_full = train_test_split(df_full, test_size=0.2, random_state=42)
+    train_full, val_full = train_test_split(df_full, test_size=0.2, random_state=42, stratify=df_full['subtype'])
     
     # 2. FILTRADO POR CATEGORÍA
     print(f"🔍 Filtrando categoría '{category_name}'...")
@@ -129,7 +129,7 @@ def run_aligned_experiment(df_full, category_name, n_trials=20):
         
         # 2. Configurar MLflow
         safe_cat_name = re.sub(r'[^a-zA-Z0-9_]', '_', category_name)
-        experiment_name = f"Pricing_{safe_cat_name}_ALIGNED"
+        experiment_name = f"Pricing_{safe_cat_name}_Stratify"
         mlflow.set_experiment(experiment_name)
         
         active_cols_str = ",".join(list(X_train.columns))
@@ -151,12 +151,23 @@ def run_aligned_experiment(df_full, category_name, n_trials=20):
             # --- GUARDADO FINAL ---
             print("    💾 Guardando modelo alineado...")
             best_params = study_cb.best_params
-            best_params.update({'cat_features': cat_features, 'loss_function': 'RMSE', 'verbose': False})
+            best_params.update({'cat_features': cat_features, 'loss_function': 'RMSE', 'verbose': False, 'random_seed': 42})
             
             final_model = CatBoostRegressor(**best_params)
             final_model.fit(X_train, y_train, eval_set=(X_val, y_val), early_stopping_rounds=50, verbose=False)
             
-            model_filename = f"model_{category_name}_ALIGNED.cbm"
+            # --- AQUÍ ESTÁ LA MAGIA: EXTRAER EL ADN ---
+            best_iteration = final_model.get_best_iteration()
+            print(f"    ⭐ Iteración óptima encontrada: {best_iteration}")
+            
+            # Guardamos todo en el Run Padre de MLflow
+            mlflow.log_params(study_cb.best_params) # Los params de Optuna
+            mlflow.log_param("best_iteration", best_iteration) # El número mágico
+            mlflow.log_param("feature_names", active_cols_str) # El orden exacto de columnas
+            mlflow.log_param("cat_features_list", cat_features) # Qué columnas eran texto
+            mlflow.log_metric("final_rmse_euros", study_cb.best_value)
+            
+            model_filename = f"model_{category_name}.cbm"
             final_model.save_model(model_filename)
             print(f"       -> Modelo guardado: {model_filename}")
 
