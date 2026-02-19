@@ -10,184 +10,523 @@ from io import BytesIO
 
 # Configuración
 API_URL = "http://127.0.0.1:8001/predict"
-DATASET_PATH = "data_dashboard.csv"
+DATASET_PATH = "../Datasets/evaluacion4_produccion.csv"
+TEST_SAMPLES_PATH = "dashboard_test_samples.csv"
 
 st.set_page_config(page_title="Amazon Price Optimizer", layout="wide", initial_sidebar_state="collapsed")
 
-# --- ESTILOS CUSTOM ---
+# --- ESTILOS CUSTOM — PREMIUM DARK EDITORIAL ---
 st.markdown("""
     <style>
-    /* Ocultar sidebar */
-    [data-testid="stSidebar"] {
-        display: none;
+    @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600;700&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+    /* ── Variables del sistema ── */
+    :root {
+        --bg-base:      #0a0c0f;
+        --bg-surface:   #111418;
+        --bg-card:      #161b22;
+        --bg-card-hover:#1c2330;
+        --border:       #21262d;
+        --border-accent:#c9933a;
+        --gold:         #c9933a;
+        --gold-light:   #e8b96a;
+        --gold-dim:     rgba(201,147,58,0.12);
+        --text-primary: #e8e6e1;
+        --text-secondary:#8b9099;
+        --text-muted:   #4a5260;
+        --success:      #2ea84c;
+        --danger:       #e5534b;
+        --info:         #388bfd;
+        --warning:      #d29922;
+        --font-display: 'Cormorant Garamond', Georgia, serif;
+        --font-mono:    'DM Mono', monospace;
+        --font-body:    'DM Sans', sans-serif;
     }
-    
-    /* Card de producto */
+
+    /* ── Base global ── */
+    html, body, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
+        background-color: var(--bg-base) !important;
+        color: var(--text-primary) !important;
+        font-family: var(--font-body) !important;
+    }
+    [data-testid="stSidebar"] { display: none; }
+    [data-testid="stHeader"]  { background: transparent !important; }
+
+    /* Fondo general */
+    .main .block-container {
+        background-color: var(--bg-base) !important;
+        padding-top: 2rem !important;
+        max-width: 1400px !important;
+    }
+
+    /* ── Tipografía heading ── */
+    h1, h2, h3 {
+        font-family: var(--font-display) !important;
+        font-weight: 300 !important;
+        letter-spacing: 0.04em !important;
+        color: var(--text-primary) !important;
+    }
+    h1 { font-size: 2.8rem !important; letter-spacing: 0.06em !important; }
+    h2 { font-size: 1.9rem !important; }
+    h3 { font-size: 1.45rem !important; }
+    h4, h5, h6, p, li, span, label {
+        font-family: var(--font-body) !important;
+        color: var(--text-primary) !important;
+    }
+
+    /* ── Divisores ── */
+    hr {
+        border: none !important;
+        border-top: 1px solid var(--border) !important;
+        margin: 2rem 0 !important;
+    }
+
+    /* ── Botones Streamlit ── */
+    .stButton > button {
+        background: transparent !important;
+        border: 1px solid var(--border) !important;
+        color: var(--text-secondary) !important;
+        border-radius: 4px !important;
+        font-family: var(--font-body) !important;
+        font-size: 0.78rem !important;
+        font-weight: 500 !important;
+        letter-spacing: 0.08em !important;
+        text-transform: uppercase !important;
+        padding: 0.55rem 1.2rem !important;
+        transition: all 0.2s ease !important;
+    }
+    .stButton > button:hover {
+        border-color: var(--gold) !important;
+        color: var(--gold) !important;
+        background: var(--gold-dim) !important;
+    }
+    .stButton > button[kind="primary"] {
+        background: var(--gold) !important;
+        border-color: var(--gold) !important;
+        color: #0a0c0f !important;
+        font-weight: 600 !important;
+    }
+    .stButton > button[kind="primary"]:hover {
+        background: var(--gold-light) !important;
+        border-color: var(--gold-light) !important;
+        color: #0a0c0f !important;
+    }
+
+    /* ── Métricas Streamlit ── */
+    [data-testid="stMetric"] {
+        background: var(--bg-card) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 6px !important;
+        padding: 1rem 1.25rem !important;
+    }
+    [data-testid="stMetricLabel"] {
+        font-family: var(--font-body) !important;
+        font-size: 0.72rem !important;
+        font-weight: 500 !important;
+        letter-spacing: 0.1em !important;
+        text-transform: uppercase !important;
+        color: var(--text-muted) !important;
+    }
+    [data-testid="stMetricValue"] {
+        font-family: var(--font-mono) !important;
+        font-size: 1.55rem !important;
+        color: var(--text-primary) !important;
+    }
+    [data-testid="stMetricDelta"] svg { display: none; }
+
+    /* ── Alerts / st.success, st.error, st.warning, st.info ── */
+    [data-testid="stAlert"] {
+        border-radius: 4px !important;
+        border-left-width: 3px !important;
+        background: var(--bg-card) !important;
+        font-family: var(--font-body) !important;
+        font-size: 0.88rem !important;
+    }
+
+    /* ── Tabs ── */
+    [data-testid="stTabs"] [data-baseweb="tab-list"] {
+        background: transparent !important;
+        border-bottom: 1px solid var(--border) !important;
+        gap: 0 !important;
+    }
+    [data-testid="stTabs"] [data-baseweb="tab"] {
+        background: transparent !important;
+        color: var(--text-muted) !important;
+        font-family: var(--font-body) !important;
+        font-size: 0.75rem !important;
+        font-weight: 500 !important;
+        letter-spacing: 0.1em !important;
+        text-transform: uppercase !important;
+        padding: 0.6rem 1.5rem !important;
+        border-bottom: 2px solid transparent !important;
+    }
+    [data-testid="stTabs"] [aria-selected="true"] {
+        color: var(--gold) !important;
+        border-bottom-color: var(--gold) !important;
+    }
+
+    /* ── Dataframe ── */
+    [data-testid="stDataFrame"] {
+        border: 1px solid var(--border) !important;
+        border-radius: 6px !important;
+    }
+    .dvn-scroller { background: var(--bg-card) !important; }
+
+    /* ── Expander ── */
+    [data-testid="stExpander"] {
+        border: 1px solid var(--border) !important;
+        border-radius: 6px !important;
+        background: var(--bg-card) !important;
+    }
+
+    /* ── Spinner ── */
+    [data-testid="stSpinner"] { color: var(--gold) !important; }
+
+    /* ── Caption / small text ── */
+    .stCaption, [data-testid="stCaptionContainer"] {
+        color: var(--text-muted) !important;
+        font-family: var(--font-body) !important;
+        font-size: 0.75rem !important;
+        letter-spacing: 0.06em !important;
+    }
+
+    /* ══════════════════════════════
+       COMPONENTES CUSTOM
+    ══════════════════════════════ */
+
+    /* ── Header principal ── */
+    .dash-header {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        padding: 0 0 2rem 0;
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 2.5rem;
+    }
+    .dash-header-title {
+        font-family: var(--font-display);
+        font-size: 3rem;
+        font-weight: 300;
+        color: var(--text-primary);
+        letter-spacing: 0.08em;
+        line-height: 1;
+        margin: 0;
+    }
+    .dash-header-title span {
+        color: var(--gold);
+    }
+    .dash-header-sub {
+        font-family: var(--font-body);
+        font-size: 0.75rem;
+        font-weight: 400;
+        color: var(--text-muted);
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        margin-top: 0.5rem;
+    }
+    .dash-header-version {
+        font-family: var(--font-mono);
+        font-size: 0.65rem;
+        color: var(--text-muted);
+        letter-spacing: 0.12em;
+        padding: 0.3rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: 3px;
+    }
+
+    /* ── Section label ── */
+    .section-label {
+        font-family: var(--font-body);
+        font-size: 0.65rem;
+        font-weight: 600;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        margin-bottom: 1.2rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+    .section-label::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background: var(--border);
+    }
+
+    /* ── Section heading ── */
+    .section-heading {
+        font-family: var(--font-display);
+        font-size: 1.6rem;
+        font-weight: 300;
+        color: var(--text-primary);
+        letter-spacing: 0.05em;
+        margin: 0 0 0.3rem 0;
+    }
+    .section-heading-num {
+        font-family: var(--font-mono);
+        font-size: 0.7rem;
+        color: var(--gold);
+        letter-spacing: 0.1em;
+        margin-bottom: 0.3rem;
+        display: block;
+    }
+
+    /* ── Product card ── */
     .product-card {
-        border: 3px solid #e0e0e0;
-        border-radius: 15px;
-        padding: 20px;
-        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-        transition: all 0.3s ease;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 0;
+        background: var(--bg-card);
+        transition: all 0.25s ease;
         cursor: pointer;
-        height: 100%;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    }
-    
-    .product-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 8px 15px rgba(0,0,0,0.2);
-        border-color: #FF9900;
-    }
-    
-    .product-card-selected {
-        border: 4px solid #FF9900;
-        background: linear-gradient(135deg, #fff5e6 0%, #ffe6cc 100%);
-        box-shadow: 0 8px 20px rgba(255,153,0,0.3);
-    }
-    
-    .product-title {
-        font-size: 1.1em;
-        font-weight: bold;
-        color: #232f3e;
-        margin-bottom: 10px;
-        height: 60px;
         overflow: hidden;
-        text-overflow: ellipsis;
+        position: relative;
+    }
+    .product-card::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 2px;
+        background: transparent;
+        transition: background 0.25s ease;
+    }
+    .product-card:hover::before,
+    .product-card-selected::before {
+        background: var(--gold);
+    }
+    .product-card:hover {
+        border-color: var(--border-accent);
+        background: var(--bg-card-hover);
+        transform: translateY(-2px);
+        box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+    }
+    .product-card-selected {
+        border-color: var(--border-accent) !important;
+        background: var(--bg-card-hover) !important;
+    }
+    .product-card-body {
+        padding: 1rem 1rem 0.75rem;
+    }
+
+    /* ── Product title ── */
+    .product-title {
+        font-family: var(--font-body);
+        font-size: 0.82rem;
+        font-weight: 400;
+        color: var(--text-primary);
+        margin-bottom: 0.75rem;
+        height: 52px;
+        overflow: hidden;
         display: -webkit-box;
-        -webkit-line-clamp: 2;
+        -webkit-line-clamp: 3;
         -webkit-box-orient: vertical;
+        line-height: 1.4;
     }
-    
+
+    /* ── Product price ── */
     .product-price {
-        font-size: 2em;
-        color: #FF9900;
-        font-weight: bold;
-        margin: 10px 0;
+        font-family: var(--font-mono);
+        font-size: 1.6rem;
+        color: var(--gold);
+        font-weight: 400;
+        margin: 0.5rem 0 0.75rem;
+        letter-spacing: -0.02em;
     }
-    
+
+    /* ── Badges ── */
     .product-badge {
         display: inline-block;
-        padding: 5px 10px;
-        border-radius: 20px;
-        font-size: 0.8em;
-        margin: 3px;
+        padding: 3px 8px;
+        border-radius: 2px;
+        font-family: var(--font-body);
+        font-size: 0.65rem;
         font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        margin: 2px 2px 2px 0;
         white-space: nowrap;
     }
-    
-    .badge-bestseller {
-        background-color: #ff9900;
-        color: white;
-    }
-    
-    .badge-coupon {
-        background-color: #00a8e1;
-        color: white;
-    }
-    
-    .badge-buybox {
-        background-color: #067d62;
-        color: white;
-    }
-    
-    .badge-sustainable {
-        background-color: #7fda89;
-        color: #232f3e;
-    }
-    
-    .badge-premium {
-        background-color: #9c27b0;
-        color: white;
-    }
-    
-    .badge-sponsored {
-        background-color: #ff5722;
-        color: white;
-    }
-    
-    .metric-small {
-        font-size: 0.9em;
-        color: #666;
-        margin: 5px 0;
-    }
-    
+    .badge-bestseller  { background: rgba(201,147,58,0.15); color: var(--gold); border: 1px solid rgba(201,147,58,0.3); }
+    .badge-coupon      { background: rgba(56,139,253,0.12); color: #388bfd;     border: 1px solid rgba(56,139,253,0.25); }
+    .badge-buybox      { background: rgba(46,168,76,0.12);  color: #2ea84c;     border: 1px solid rgba(46,168,76,0.25); }
+    .badge-sustainable { background: rgba(63,185,80,0.12);  color: #3fb950;     border: 1px solid rgba(63,185,80,0.25); }
+    .badge-premium     { background: rgba(163,113,247,0.12);color: #a371f7;     border: 1px solid rgba(163,113,247,0.25); }
+    .badge-sponsored   { background: rgba(229,83,75,0.12);  color: #e5534b;     border: 1px solid rgba(229,83,75,0.25); }
+
+    /* ── Category / Subtype tags ── */
     .category-tag {
-        background-color: #232f3e;
-        color: white;
-        padding: 5px 12px;
-        border-radius: 5px;
-        font-size: 0.85em;
+        font-family: var(--font-body);
+        font-size: 0.62rem;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--text-muted);
         display: inline-block;
-        margin-bottom: 10px;
+        margin-bottom: 0.5rem;
     }
-    
     .subtype-tag {
-        background-color: #546e7a;
-        color: white;
-        padding: 5px 12px;
-        border-radius: 5px;
-        font-size: 0.75em;
+        font-family: var(--font-body);
+        font-size: 0.62rem;
+        font-weight: 400;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--text-muted);
         display: inline-block;
-        margin-bottom: 10px;
-        margin-left: 5px;
+        margin-bottom: 0.5rem;
+        margin-left: 0.5rem;
     }
-    
-    /* Scroll horizontal personalizado */
-    .product-carousel {
+    .subtype-tag::before { content: '·  '; }
+
+    /* ── Metric small ── */
+    .metric-small {
+        font-family: var(--font-body);
+        font-size: 0.78rem;
+        color: var(--text-secondary);
+        margin: 4px 0;
         display: flex;
-        overflow-x: auto;
-        gap: 20px;
-        padding: 20px 0;
-        scroll-behavior: smooth;
+        align-items: center;
+        gap: 0.35rem;
     }
-    
-    .product-carousel::-webkit-scrollbar {
-        height: 10px;
-    }
-    
-    .product-carousel::-webkit-scrollbar-track {
-        background: #f1f1f1;
-        border-radius: 10px;
-    }
-    
-    .product-carousel::-webkit-scrollbar-thumb {
-        background: #FF9900;
-        border-radius: 10px;
-    }
-    
-    .product-carousel::-webkit-scrollbar-thumb:hover {
-        background: #e88b00;
-    }
-    
+
+    /* ── Precio big display ── */
     .big-metric {
-        font-size: 3em;
-        font-weight: bold;
-        color: #FF9900;
+        font-family: var(--font-mono);
+        font-size: 2.8rem;
+        font-weight: 300;
+        color: var(--gold);
         text-align: center;
+        letter-spacing: -0.02em;
     }
-    
+
+    /* ── Imagen container ── */
     .product-image-container {
         width: 100%;
-        height: 250px;
+        height: 200px;
         display: flex;
         align-items: center;
         justify-content: center;
         overflow: hidden;
-        background-color: #f8f8f8;
-        border-radius: 10px;
-        margin-bottom: 15px;
+        background: var(--bg-surface);
+        border-bottom: 1px solid var(--border);
     }
-
     .product-image-container img {
         max-width: 100%;
         max-height: 100%;
         object-fit: contain;
     }
+
+    /* ── Eliminar gaps de Streamlit dentro de cards ── */
+    [data-testid="stVerticalBlock"] > [data-testid="stVerticalBlockBorderWrapper"] > div > div > div {
+        gap: 0 !important;
+    }
+    /* Colapsar el margen superior del elemento vacío que Streamlit pone entre HTML y botón */
+    [data-testid="stVerticalBlock"] > div:has(> [data-testid="stButton"]) {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+    }
+
+    /* ── Salud del producto ── */
+    .health-panel {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 2rem;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+    }
+    .health-panel::after {
+        content: '';
+        position: absolute;
+        bottom: 0; left: 0; right: 0;
+        height: 3px;
+    }
+    .health-score {
+        font-family: var(--font-mono);
+        font-size: 4rem;
+        font-weight: 300;
+        letter-spacing: -0.04em;
+        line-height: 1;
+    }
+    .health-label {
+        font-family: var(--font-body);
+        font-size: 0.65rem;
+        font-weight: 600;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        margin-top: 0.5rem;
+    }
+
+    /* ── Result comparison boxes ── */
+    .result-box {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 1.5rem;
+        text-align: center;
+    }
+    .result-box-label {
+        font-family: var(--font-body);
+        font-size: 0.65rem;
+        font-weight: 600;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        margin-bottom: 0.75rem;
+    }
+    .result-box-value {
+        font-family: var(--font-mono);
+        font-size: 2.2rem;
+        font-weight: 300;
+        color: var(--text-primary);
+        letter-spacing: -0.02em;
+    }
+    .result-box-value.gold { color: var(--gold); }
+    .result-box-value.green { color: var(--success); }
+    .result-box-value.red { color: var(--danger); }
+    .result-arrow {
+        font-family: var(--font-mono);
+        font-size: 1.8rem;
+        color: var(--text-muted);
+        text-align: center;
+        padding-top: 2.5rem;
+    }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg-base); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--gold); }
+
+    /* ── Footer ── */
+    .dash-footer {
+        font-family: var(--font-mono);
+        font-size: 0.65rem;
+        color: var(--text-muted);
+        letter-spacing: 0.12em;
+        text-align: center;
+        padding: 2rem 0 1rem;
+        border-top: 1px solid var(--border);
+        margin-top: 3rem;
+    }
     </style>
 """, unsafe_allow_html=True)
 
 # --- 1. CARGA DE DATOS ---
+
+# ── Plotly dark theme helper ──
+PLOTLY_DARK = dict(
+    paper_bgcolor='rgba(0,0,0,0)',
+    plot_bgcolor='rgba(17,20,24,1)',
+    font=dict(family='DM Sans', color='#8b9099', size=11),
+    title_font=dict(family='DM Sans', color='#e8e6e1', size=13),
+    xaxis=dict(gridcolor='#21262d', linecolor='#21262d', tickfont=dict(color='#4a5260')),
+    yaxis=dict(gridcolor='#21262d', linecolor='#21262d', tickfont=dict(color='#4a5260')),
+    legend=dict(bgcolor='rgba(17,20,24,0.8)', bordercolor='#21262d', borderwidth=1, font=dict(color='#8b9099')),
+    margin=dict(l=10, r=10, t=40, b=10)
+)
+
 @st.cache_data
 def load_image_from_url(url):
     """Carga imagen desde URL con caché"""
@@ -200,7 +539,7 @@ def load_image_from_url(url):
 def load_data():
     try:
         if not os.path.exists(DATASET_PATH):
-            st.error(f"⛔ No se encuentra el archivo en: {DATASET_PATH}")
+            st.error(f"No se encuentra el archivo en: {DATASET_PATH}")
             return None
         
         df = pd.read_csv(DATASET_PATH)
@@ -216,33 +555,42 @@ def load_data():
         st.error(f"Error cargando datos: {e}")
         return None
 
-def get_sample_products(df, n_products=5):
-    """Selecciona 5 productos de 5 categorías diferentes"""
-    categorias = df['category'].unique()
-    
-    # Asegurarnos de tener al menos 5 categorías
+@st.cache_data
+def load_test_samples():
+    """Carga los 120 productos de test desde el CSV dedicado"""
+    try:
+        if not os.path.exists(TEST_SAMPLES_PATH):
+            st.error(f"No se encuentra el archivo de muestras en: {TEST_SAMPLES_PATH}")
+            return None
+        df_test = pd.read_csv(TEST_SAMPLES_PATH)
+        df_test.columns = df_test.columns.str.lower()
+        df_test['precio_real']     = np.exp(df_test['log_original_price'])
+        df_test['ventas_mes_real'] = np.exp(df_test['log_purchased_last_month'])
+        df_test['reviews_real']    = np.exp(df_test['log_total_reviews'])
+        return df_test
+    except Exception as e:
+        st.error(f"Error cargando muestras de test: {e}")
+        return None
+
+def get_sample_products(n_products=5):
+    """Selecciona 5 productos aleatorios de 5 categorías distintas del CSV de test"""
+    df_test = load_test_samples()
+    if df_test is None or len(df_test) == 0:
+        return []
+
+    categorias = df_test['category'].unique()
     if len(categorias) < n_products:
-        st.warning(f"Solo hay {len(categorias)} categorías disponibles")
         n_products = len(categorias)
-    
-    # Seleccionar 5 categorías aleatorias
+
     categorias_seleccionadas = np.random.choice(categorias, size=n_products, replace=False)
-    
+
     productos_muestra = []
     for categoria in categorias_seleccionadas:
-        # De cada categoría, tomar un producto aleatorio con buenas métricas
-        productos_categoria = df[df['category'] == categoria]
-        
-        # Priorizar productos con buen rating y ventas
-        productos_categoria = productos_categoria[
-            (productos_categoria['product_rating'] >= 3.5) &
-            (productos_categoria['ventas_mes_real'] > 10)
-        ]
-        
+        productos_categoria = df_test[df_test['category'] == categoria]
         if len(productos_categoria) > 0:
             producto = productos_categoria.sample(n=1).iloc[0]
             productos_muestra.append(producto)
-    
+
     return productos_muestra
 
 df = load_data()
@@ -252,7 +600,7 @@ if df is None:
 
 # Inicializar session state
 if 'productos_muestra' not in st.session_state:
-    st.session_state.productos_muestra = get_sample_products(df)
+    st.session_state.productos_muestra = get_sample_products()
     st.session_state.producto_seleccionado_idx = None
 
 if 'refresh' not in st.session_state:
@@ -262,23 +610,66 @@ if 'selected_tab' not in st.session_state:
     st.session_state.selected_tab = 'resumen'
 
 # --- 2. HEADER ---
-col_title, col_refresh = st.columns([4, 1])
+st.markdown("""
+    <div class="dash-header">
+        <div>
+            <p class="dash-header-sub">Intelligence Dashboard · Amazon Marketplace</p>
+            <h1 class="dash-header-title">Smart <span>Pricing</span></h1>
+        </div>
+        <div class="dash-header-version">v3.0 · ML ENGINE</div>
+    </div>
+""", unsafe_allow_html=True)
 
-with col_title:
-    st.title("🛒 Amazon Smart Pricing Dashboard")
-    st.markdown("### Selecciona un producto para analizar su precio óptimo")
+col_refresh = st.columns([2, 3, 1])
 
-with col_refresh:
-    st.markdown("<br>", unsafe_allow_html=True)
-    if st.button("🔄 Cambiar Productos", use_container_width=True):
-        st.session_state.productos_muestra = get_sample_products(df)
+# ── Columna buscador ──────────────────────────────────────────────────────────
+with col_refresh[1]:
+    df_test_search = load_test_samples()
+    if df_test_search is not None:
+        busqueda = st.text_input(
+            "Buscar",
+            placeholder="Buscar producto por nombre…",
+            label_visibility="collapsed",
+            key="product_search"
+        )
+        if busqueda and len(busqueda) >= 2:
+            mask = df_test_search['original_title'].str.startswith(busqueda, na=False)
+            resultados = df_test_search[mask]
+
+            if len(resultados) > 0:
+                # Construimos un dict título-truncado → índice df
+                opciones = {
+                    row['original_title'][:90]: idx
+                    for idx, row in resultados.head(8).iterrows()
+                }
+                seleccion_nombre = st.selectbox(
+                    "Resultados",
+                    options=list(opciones.keys()),
+                    label_visibility="collapsed",
+                    key="product_search_select"
+                )
+                if st.button("Cargar producto", use_container_width=True, key="load_searched_product"):
+                    producto_cargado = df_test_search.loc[opciones[seleccion_nombre]]
+                    # Mantener los otros 4 productos; el buscado ocupa el slot 0
+                    productos_actuales = list(st.session_state.productos_muestra)
+                    if not productos_actuales:
+                        productos_actuales = get_sample_products()
+                    productos_actuales[0] = producto_cargado
+                    st.session_state.productos_muestra = productos_actuales
+                    st.session_state.producto_seleccionado_idx = 0
+                    st.rerun()
+            else:
+                st.caption("Sin resultados para esa búsqueda.")
+
+# ── Columna botón Cambiar Productos ──────────────────────────────────────────
+with col_refresh[2]:
+    if st.button("Cambiar Productos", use_container_width=True, key="refresh_products"):
+        st.session_state.productos_muestra = get_sample_products()
         st.session_state.producto_seleccionado_idx = None
         st.rerun()
 
-st.markdown("---")
-
 # --- 3. CARRUSEL DE PRODUCTOS ---
-st.markdown("#### 📦 Catálogo de Productos")
+st.markdown('<div class="section-label">Catálogo de Productos</div>', unsafe_allow_html=True)
 
 # Crear columnas para los productos
 cols = st.columns(5)
@@ -312,28 +703,8 @@ for idx, producto in enumerate(st.session_state.productos_muestra):
                     placeholder = Image.new('RGB', (300, 300), (240, 240, 240))
                     st.image(placeholder, use_container_width=True)
             
-            # Categoría y Subtipo
-            st.markdown(f'<div class="category-tag">{producto["category"]}</div><div class="subtype-tag">{producto["subtype"]}</div>', 
-                       unsafe_allow_html=True)
-            
-            # Título (usamos brand + subtype como título)
-            titulo_producto = f"{producto['original_title']}"
-            st.markdown(f'<div class="product-title">{titulo_producto}</div>', 
-                       unsafe_allow_html=True)
-            
-            # Precio
-            st.markdown(f'<div class="product-price">{producto["precio_real"]:.2f} €</div>', 
-                       unsafe_allow_html=True)
-            
-            # Métricas pequeñas
-            st.markdown(f'''
-                <div class="metric-small">⭐ {producto["product_rating"]}/5.0 ({int(producto["reviews_real"])} reviews)</div>
-                <div class="metric-small">📊 {int(producto["ventas_mes_real"])} ventas/mes</div>
-                <div class="metric-small">🏭 {producto["market_tier"]} | {producto["condition"]}</div>
-            ''', unsafe_allow_html=True)
-            
-            # Badges - reservar espacio fijo
-            badges_html = '<div style="min-height: 70px; margin: 10px 0;">'
+            # Bloque de contenido: todo en HTML con alturas fijas para alineación perfecta
+            badges_html = ''
             if producto['is_best_seller'] == 'Yes':
                 badges_html += '<span class="product-badge badge-bestseller">🏆 Best Seller</span>'
             if producto['has_coupon'] == 1:
@@ -346,13 +717,31 @@ for idx, producto in enumerate(st.session_state.productos_muestra):
                 badges_html += '<span class="product-badge badge-premium">👑 Premium</span>'
             if producto['is_sponsored'] == 'Yes':
                 badges_html += '<span class="product-badge badge-sponsored">📢 Sponsored</span>'
-            badges_html += '</div>'
-            
-            st.markdown(badges_html, unsafe_allow_html=True)
+
+            titulo_producto = producto['original_title']
+
+            st.markdown(f'''
+                <div style="padding: 0.75rem 0.75rem 0.5rem;">
+                    <div style="height:32px;overflow:hidden;margin-bottom:0.5rem;">
+                        <span class="category-tag">{producto["category"]}</span>
+                        <span class="subtype-tag">{producto["subtype"]}</span>
+                    </div>
+                    <div class="product-title" style="height:55px;-webkit-line-clamp:3;">{titulo_producto}</div>
+                    <div class="product-price">{producto["precio_real"]:.2f} €</div>
+                    <div style="height:70px;overflow:hidden;">
+                        <div class="metric-small">⭐ {producto["product_rating"]}/5.0 &nbsp;·&nbsp; {int(producto["reviews_real"])} reviews</div>
+                        <div class="metric-small">📊 {int(producto["ventas_mes_real"])} ventas/mes</div>
+                        <div class="metric-small">🏭 {producto["market_tier"]} &nbsp;·&nbsp; {producto["condition"]}</div>
+                    </div>
+                    <div style="height:60px;overflow:hidden;margin: 0.5rem 0 0.75rem;">
+                        {badges_html if badges_html else '&nbsp;'}
+                    </div>
+                </div>
+            ''', unsafe_allow_html=True)
             
             # Botón de selección
             if st.button(
-                "✅ Seleccionar" if is_selected else "👉 Seleccionar",
+                "Seleccionado" if is_selected else "Seleccionar",
                 key=f"select_{idx}",
                 use_container_width=True,
                 type="primary" if is_selected else "secondary"
@@ -360,13 +749,13 @@ for idx, producto in enumerate(st.session_state.productos_muestra):
                 st.session_state.producto_seleccionado_idx = idx
                 st.rerun()
 
-st.markdown("---")
+st.markdown("<br>", unsafe_allow_html=True)
 
 # --- 4. ANÁLISIS DEL PRODUCTO SELECCIONADO ---
 if st.session_state.producto_seleccionado_idx is not None:
     producto_seleccionado = st.session_state.productos_muestra[st.session_state.producto_seleccionado_idx]
     
-    st.markdown("## 📊 Producto Seleccionado para Análisis")
+    st.markdown('<div class="section-label">Análisis del Producto Seleccionado</div>', unsafe_allow_html=True)
     
     # Vista detallada del producto seleccionado
     det_col1, det_col2, det_col3 = st.columns([1, 2, 1])
@@ -374,27 +763,26 @@ if st.session_state.producto_seleccionado_idx is not None:
     with det_col1:
         img = load_image_from_url(producto_seleccionado['product_image_url'])
         if img:
-            # Redimensionar la imagen a un tamaño fijo antes de mostrarla
             img_resized = img.copy()
             img_resized.thumbnail((300, 300), Image.Resampling.LANCZOS)
-            
-            # Crear imagen con fondo blanco del mismo tamaño
-            background = Image.new('RGB', (300, 300), (255, 255, 255))
-            # Centrar la imagen
+            background = Image.new('RGB', (300, 300), (17, 20, 24))
             offset = ((300 - img_resized.size[0]) // 2, (300 - img_resized.size[1]) // 2)
             background.paste(img_resized, offset)
-            
             st.image(background, use_container_width=True)
         else:
-            # Crear imagen placeholder del mismo tamaño
-            placeholder = Image.new('RGB', (300, 300), (240, 240, 240))
+            placeholder = Image.new('RGB', (300, 300), (22, 27, 34))
             st.image(placeholder, use_container_width=True)
     
     with det_col2:
         titulo_producto = f"{producto_seleccionado['original_title']}"
         st.markdown(f"### {titulo_producto}")
-        st.markdown(f"**📂 Categoría:** {producto_seleccionado['category']} | **🏷️ Subtipo:** {producto_seleccionado['subtype']}")
-        st.markdown(f"**🏭 Tier:** {producto_seleccionado['market_tier']} | **📦 Estado:** {producto_seleccionado['condition']} | **🔧 Generación:** {producto_seleccionado['tech_generation']}")
+        st.markdown(
+            f'<p style="font-size:0.75rem;letter-spacing:0.1em;text-transform:uppercase;color:#4a5260;margin-bottom:1rem;">'
+            f'{producto_seleccionado["category"]} &nbsp;·&nbsp; {producto_seleccionado["subtype"]} &nbsp;·&nbsp; '
+            f'{producto_seleccionado["market_tier"]} &nbsp;·&nbsp; {producto_seleccionado["condition"]} &nbsp;·&nbsp; {producto_seleccionado["tech_generation"]}'
+            f'</p>',
+            unsafe_allow_html=True
+        )
         
         # Métricas principales
         metric_cols = st.columns(4)
@@ -405,30 +793,37 @@ if st.session_state.producto_seleccionado_idx is not None:
                 f"{producto_seleccionado['precio_real']:.2f} €",
                 delta=f"-{producto_seleccionado['discount_percentage']*100:.0f}%" if producto_seleccionado['discount_percentage'] > 0 else None
             )
-        
         with metric_cols[1]:
             st.metric("Rating", f"{producto_seleccionado['product_rating']}/5")
-        
         with metric_cols[2]:
             st.metric("Ventas (mes)", f"{int(producto_seleccionado['ventas_mes_real'])}")
-        
         with metric_cols[3]:
             st.metric("Reviews", f"{int(producto_seleccionado['reviews_real'])}")
     
     with det_col3:
-        st.markdown("### Características")
+        st.markdown(
+            '<p style="font-size:0.65rem;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;'
+            'color:#4a5260;margin-bottom:1rem;">Características</p>',
+            unsafe_allow_html=True
+        )
+        badges = []
         if producto_seleccionado['is_best_seller'] == 'Yes':
-            st.success("🏆 Best Seller")
+            badges.append('<span class="product-badge badge-bestseller">🏆 Best Seller</span>')
         if producto_seleccionado['has_coupon'] == 1:
-            st.info("🎟️ Cupón Activo")
+            badges.append('<span class="product-badge badge-coupon">🎟️ Cupón Activo</span>')
         if producto_seleccionado['buy_box_availability'] == 1:
-            st.success("📦 Buy Box")
+            badges.append('<span class="product-badge badge-buybox">📦 Buy Box</span>')
         if producto_seleccionado['is_sponsored'] == 'Yes':
-            st.warning("📢 Patrocinado")
+            badges.append('<span class="product-badge badge-sponsored">📢 Patrocinado</span>')
         if producto_seleccionado['sustainability_tags'] == 1:
-            st.success("🌱 Sostenible")
+            badges.append('<span class="product-badge badge-sustainable">🌱 Sostenible</span>')
         if producto_seleccionado['is_premium_brand']:
-            st.info("👑 Marca Premium")
+            badges.append('<span class="product-badge badge-premium">👑 Marca Premium</span>')
+        
+        if badges:
+            st.markdown('<div style="display:flex;flex-direction:column;gap:0.5rem;">' + ''.join(badges) + '</div>', unsafe_allow_html=True)
+        else:
+            st.markdown('<p style="color:#4a5260;font-size:0.8rem;">Sin características especiales</p>', unsafe_allow_html=True)
     
     st.markdown("<br>", unsafe_allow_html=True)
     
@@ -436,9 +831,9 @@ if st.session_state.producto_seleccionado_idx is not None:
     tab_cols = st.columns(3)
     
     tab_options = {
-        'resumen': {'icon': '📊', 'title': 'Resumen', 'subtitle': 'Vista general'},
-        'mercado': {'icon': '🔍', 'title': 'Análisis de Mercado', 'subtitle': '¿Dónde estoy?'},
-        'optimizar': {'icon': '💰', 'title': 'Optimizar Precio', 'subtitle': 'IA y predicción'}
+        'resumen': {'icon': '', 'title': 'Resumen', 'subtitle': 'Vista general'},
+        'mercado': {'icon': '', 'title': 'Análisis de Mercado', 'subtitle': '¿Dónde estoy?'},
+        'optimizar': {'icon': '', 'title': 'Optimizar Precio', 'subtitle': 'IA y predicción'}
     }
     
     for idx, (tab_key, tab_info) in enumerate(tab_options.items()):
@@ -446,7 +841,7 @@ if st.session_state.producto_seleccionado_idx is not None:
             is_active = st.session_state.selected_tab == tab_key
             
             if st.button(
-                f"{tab_info['icon']}\n{tab_info['title']}\n{tab_info['subtitle']}",
+                f"{tab_info['title']}\n{tab_info['subtitle']}",
                 key=f"tab_{tab_key}",
                 use_container_width=True,
                 type="primary" if is_active else "secondary"
@@ -460,13 +855,13 @@ if st.session_state.producto_seleccionado_idx is not None:
     
     # ==================== TAB 1: RESUMEN ====================
     if st.session_state.selected_tab == 'resumen':
-        st.markdown("## 📊 Resumen del Producto")
+        st.markdown('<div class="section-label">Resumen del Producto</div>', unsafe_allow_html=True)
         
         # KPIs comparativos - Filtrar por categoría Y subtipo
         df_categoria = df[df['category'] == producto_seleccionado['category']]
         df_subtipo = df[df['subtype'] == producto_seleccionado['subtype']]
         
-        st.markdown("### 📍 Tu Producto vs Promedio de tu Subtipo")
+        st.markdown('<p style="font-size:0.8rem;color:#8b9099;margin-bottom:1rem;">Tu producto vs promedio del subtipo</p>', unsafe_allow_html=True)
         
         kpi_cols = st.columns(4)
         
@@ -508,9 +903,7 @@ if st.session_state.producto_seleccionado_idx is not None:
             )
         
         st.markdown("---")
-        
-        # Semáforo de salud
-        st.markdown("### 🚦 Diagnóstico Rápido")
+        st.markdown('<div class="section-label">Diagnóstico Rápido</div>', unsafe_allow_html=True)
         
         # Calcular scores individuales (mismo método que Análisis de Mercado)
         # Score 1: Precio (mejor cerca de la mediana)
@@ -535,23 +928,23 @@ if st.session_state.producto_seleccionado_idx is not None:
         
         # Determinar color
         if score_salud >= 70:
-            color = "green"
+            color_hex = "#2ea84c"
             status = "EXCELENTE"
             emoji = "🟢"
         elif score_salud >= 40:
-            color = "orange"
+            color_hex = "#d29922"
             status = "BUENA"
             emoji = "🟡"
         else:
-            color = "red"
+            color_hex = "#e5534b"
             status = "NECESITA ATENCIÓN"
             emoji = "🔴"
         
         st.markdown(f"""
-            <div style='text-align: center; padding: 30px; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); border-radius: 15px;'>
-                <h1 style='font-size: 4em; margin: 0;'>{emoji}</h1>
-                <h2 style='color: {color}; margin: 10px 0;'>SALUD DEL PRODUCTO: {status}</h2>
-                <p style='font-size: 2em; font-weight: bold; color: {color};'>{score_salud:.0f}/100</p>
+            <div class="health-panel" style="border-color:{color_hex}33;">
+                <div class="health-label" style="color:{color_hex};">SALUD DEL PRODUCTO</div>
+                <div class="health-score" style="color:{color_hex};">{score_salud:.0f}</div>
+                <div style="font-family:'DM Mono',monospace;font-size:0.7rem;color:#4a5260;margin-top:0.25rem;">/100 &nbsp;·&nbsp; {status}</div>
             </div>
         """, unsafe_allow_html=True)
         
@@ -561,36 +954,36 @@ if st.session_state.producto_seleccionado_idx is not None:
         detail_cols = st.columns(3)
         
         with detail_cols[0]:
-            st.markdown(f"**💰 Precio:** Score {score_precio:.0f}/100")
+            st.markdown(f"**Precio:** Score {score_precio:.0f}/100")
             if score_precio >= 70:
-                st.success("✅ Precio bien posicionado")
+                st.success("Precio bien posicionado")
             elif score_precio >= 40:
-                st.info("ℹ️ Precio en rango aceptable")
+                st.info("Precio en rango aceptable")
             else:
-                st.warning("⚠️ Precio muy alejado de la mediana de mercado")
+                st.warning("Precio muy alejado de la mediana de mercado")
         
         with detail_cols[1]:
-            st.markdown(f"**⭐ Calidad:** Score {score_calidad:.0f}/100")
+            st.markdown(f"**Calidad:** Score {score_calidad:.0f}/100")
             if score_calidad >= 70:
-                st.success("✅ Buena calidad percibida")
+                st.success("Buena calidad percibida")
             elif score_calidad >= 40:
-                st.info("ℹ️ Calidad aceptable")
+                st.info("Calidad aceptable")
             else:
-                st.warning("⚠️ Necesitas mejorar rating y/o conseguir más reviews")
+                st.warning("Necesitas mejorar rating y/o conseguir más reviews")
         
         with detail_cols[2]:
-            st.markdown(f"**📊 Popularidad:** Score {score_popularidad:.0f}/100")
+            st.markdown(f"**Popularidad:** Score {score_popularidad:.0f}/100")
             if score_popularidad >= 70:
-                st.success("✅ Vendes bien en tu subtipo")
+                st.success("Vendes bien en tu subtipo")
             elif score_popularidad >= 40:
-                st.info("ℹ️ Ventas en rango medio")
+                st.info("Ventas en rango medio")
             else:
-                st.warning("⚠️ Tus ventas están por debajo del promedio")
+                st.warning("Tus ventas están por debajo del promedio")
     
     # ==================== TAB 2: ANÁLISIS DE MERCADO ====================
     elif st.session_state.selected_tab == 'mercado':
-        st.markdown("## 🔍 Análisis de Mercado")
-        st.markdown("### Entiende tu posición competitiva y oportunidades de mejora")
+        st.markdown('<div class="section-label">Análisis de Mercado</div>', unsafe_allow_html=True)
+        st.markdown('<p style="font-size:0.8rem;color:#8b9099;margin-bottom:2rem;">Entiende tu posición competitiva y oportunidades de mejora</p>', unsafe_allow_html=True)
         st.markdown("---")
         
         # Obtener datos de la categoría y subtipo
@@ -598,7 +991,7 @@ if st.session_state.producto_seleccionado_idx is not None:
         df_subtipo = df[df['subtype'] == producto_seleccionado['subtype']]
         
         # ========== SECCIÓN 1: TU POSICIÓN EN EL MERCADO ==========
-        st.markdown("### 1️⃣ Tu Posición en el Mercado")
+        st.markdown('<span class="section-heading-num">01</span><div class="section-heading">Tu Posición en el Mercado</div>', unsafe_allow_html=True)
         st.caption("¿Dónde estoy yo en mi subtipo?")
         
         # Crear zonas de posicionamiento (usando subtipo para más precisión)
@@ -751,9 +1144,9 @@ if st.session_state.producto_seleccionado_idx is not None:
             xaxis_title="Precio (€)",
             yaxis_title="Ventas último mes",
             height=600,
-            plot_bgcolor='white',
             hovermode='closest',
-            showlegend=True
+            showlegend=True,
+            **PLOTLY_DARK
         )
         
         st.plotly_chart(fig1, use_container_width=True)
@@ -812,7 +1205,7 @@ if st.session_state.producto_seleccionado_idx is not None:
         st.markdown("---")
         
         # ========== GRÁFICO ADICIONAL: DISTRIBUCIÓN POR CATEGORÍA ==========
-        st.markdown("### 📊 Análisis por Categoría y Subtipo")
+        st.markdown("### Análisis por Categoría y Subtipo")
         
         # Tabs para diferentes vistas
         analisis_tabs = st.tabs(["Por Categoría", "Por Subtipo", "Productos Patrocinados"])
@@ -838,6 +1231,7 @@ if st.session_state.producto_seleccionado_idx is not None:
                 color_continuous_scale='Viridis',
                 height=400
             )
+            fig_cat.update_layout(**PLOTLY_DARK)
             
             # Marcar tu categoría
             tu_categoria_idx = categoria_stats[categoria_stats['category'] == producto_seleccionado['category']].index
@@ -848,8 +1242,8 @@ if st.session_state.producto_seleccionado_idx is not None:
                     text="TU CATEGORÍA",
                     showarrow=True,
                     arrowhead=2,
-                    arrowcolor="red",
-                    font=dict(color="red", size=12, family="Arial Black")
+                    arrowcolor="#c9933a",
+                    font=dict(color="#c9933a", size=11, family="DM Sans")
                 )
             
             st.plotly_chart(fig_cat, use_container_width=True)
@@ -872,9 +1266,10 @@ if st.session_state.producto_seleccionado_idx is not None:
                 title=f'Precio Promedio por Subtipo en {producto_seleccionado["category"]}',
                 labels={'precio_real': 'Precio Promedio (€)', 'subtype': 'Subtipo'},
                 color='precio_real',
-                color_continuous_scale='Blues',
+                color_continuous_scale='Cividis',
                 height=400
             )
+            fig_sub.update_layout(**PLOTLY_DARK)
             
             # Marcar tu subtipo
             tu_subtipo_idx = subtipo_stats[subtipo_stats['subtype'] == producto_seleccionado['subtype']].index
@@ -885,8 +1280,8 @@ if st.session_state.producto_seleccionado_idx is not None:
                     text="TU SUBTIPO",
                     showarrow=True,
                     arrowhead=2,
-                    arrowcolor="red",
-                    font=dict(color="red", size=12, family="Arial Black")
+                    arrowcolor="#c9933a",
+                    font=dict(color="#c9933a", size=11, family="DM Sans")
                 )
             
             st.plotly_chart(fig_sub, use_container_width=True)
@@ -922,7 +1317,8 @@ if st.session_state.producto_seleccionado_idx is not None:
                 xaxis_title='Tipo',
                 yaxis_title='Precio Promedio (€)',
                 height=400,
-                showlegend=False
+                showlegend=False,
+                **PLOTLY_DARK
             )
             
             st.plotly_chart(fig_sponsored, use_container_width=True)
@@ -961,17 +1357,17 @@ if st.session_state.producto_seleccionado_idx is not None:
             
             # Insight
             if producto_seleccionado['is_sponsored'] == 'Yes':
-                st.info("✅ Tu producto está patrocinado. Esto puede aumentar tu visibilidad.")
+                st.info("Tu producto está patrocinado. Esto puede aumentar tu visibilidad.")
             else:
                 if pct_patrocinados > 30:
-                    st.warning(f"⚠️ {pct_patrocinados:.0f}% de tu categoría está patrocinada. Considera activar publicidad para competir.")
+                    st.warning(f"{pct_patrocinados:.0f}% de tu categoría está patrocinada. Considera activar publicidad para competir.")
                 else:
-                    st.success("✅ Bajo nivel de publicidad en tu categoría. Puedes competir orgánicamente.")
+                    st.success("Bajo nivel de publicidad en tu categoría. Puedes competir orgánicamente.")
         
         st.markdown("---")
         
         # ========== SECCIÓN 2: TUS COMPETIDORES MÁS CERCANOS ==========
-        st.markdown("### 2️⃣ Tus Competidores Más Cercanos")
+        st.markdown('<span class="section-heading-num">02</span><div class="section-heading">Competidores Más Cercanos</div>', unsafe_allow_html=True)
         st.caption("¿Contra quién compito en mi subtipo?")
         
         # Filtrar competidores: mismo subtipo + precio similar (±20%)
@@ -1017,7 +1413,7 @@ if st.session_state.producto_seleccionado_idx is not None:
         )
         
         # Insights de competidores
-        st.markdown("#### 💡 Insights Clave")
+        st.markdown("#### Insights Clave")
         
         insight_comp_cols = st.columns(4)
         
@@ -1030,7 +1426,7 @@ if st.session_state.producto_seleccionado_idx is not None:
                 delta=f"{pct_cupon:.0f}%"
             )
             if pct_cupon > 50 and producto_seleccionado['has_coupon'] == 0:
-                st.warning("⚠️ Considera activar un cupón")
+                st.warning("Considera activar un cupón")
         
         with insight_comp_cols[1]:
             precio_promedio_comp = competidores_directos['precio_real'].mean() if len(competidores_directos) > 0 else 0
@@ -1050,7 +1446,7 @@ if st.session_state.producto_seleccionado_idx is not None:
                 delta="⭐" if diff_rating > 0 else None
             )
             if diff_rating < 0:
-                st.warning("⚠️ Tu rating está por debajo")
+                st.warning("Tu rating está por debajo")
         
         with insight_comp_cols[3]:
             num_premium = (competidores_directos['is_premium_brand'] == True).sum()
@@ -1064,7 +1460,7 @@ if st.session_state.producto_seleccionado_idx is not None:
         st.markdown("---")
         
         # ========== SECCIÓN 3: ¿QUÉ HACE LA DIFERENCIA? ==========
-        st.markdown("### 3️⃣ ¿Qué Hace la Diferencia?")
+        st.markdown('<span class="section-heading-num">03</span><div class="section-heading">¿Qué Hace la Diferencia?</div>', unsafe_allow_html=True)
         st.caption("¿Qué características importan en mi subtipo?")
         
         # Análisis de características
@@ -1143,18 +1539,18 @@ if st.session_state.producto_seleccionado_idx is not None:
                 yaxis_title='Precio Promedio (€)',
                 barmode='group',
                 height=400,
-                plot_bgcolor='white'
+                **PLOTLY_DARK
             )
             
             st.plotly_chart(fig3, use_container_width=True)
             
             # Tabla de impacto
-            st.markdown("#### 📊 Impacto de Características")
+            st.markdown("#### Impacto de Características")
             
             impacto_cols = st.columns(2)
             
             with impacto_cols[0]:
-                st.markdown("##### 💰 Impacto en Precio")
+                st.markdown("##### Impacto en Precio")
                 for dato in datos_comparacion:
                     diff_pct = (dato['Diff Precio'] / dato['Precio SIN']) * 100 if dato['Precio SIN'] > 0 else 0
                     tiene_marca = "✅" if dato['Tienes'] else "❌"
@@ -1165,7 +1561,7 @@ if st.session_state.producto_seleccionado_idx is not None:
                         st.info(f"{tiene_marca} **{dato['Característica']}**: {dato['Diff Precio']:.2f}€ ({diff_pct:+.1f}%)")
             
             with impacto_cols[1]:
-                st.markdown("##### 📈 Impacto en Ventas")
+                st.markdown("##### Impacto en Ventas")
                 for dato in datos_comparacion:
                     diff_ventas_pct = (dato['Diff Ventas'] / dato['Ventas SIN']) * 100 if dato['Ventas SIN'] > 0 else 0
                     tiene_marca = "✅" if dato['Tienes'] else "❌"
@@ -1176,7 +1572,7 @@ if st.session_state.producto_seleccionado_idx is not None:
                         st.info(f"{tiene_marca} **{dato['Característica']}**: {int(dato['Diff Ventas'])} ventas ({diff_ventas_pct:+.1f}%)")
             
             # Recomendaciones
-            st.markdown("#### 💡 Recomendaciones")
+            st.markdown("#### Recomendaciones")
             caracteristicas_faltantes = [d for d in datos_comparacion if not d['Tienes'] and d['Diff Precio'] > 0]
             
             if caracteristicas_faltantes:
@@ -1187,12 +1583,12 @@ if st.session_state.producto_seleccionado_idx is not None:
                 for dato in caracteristicas_faltantes[:3]:  # Top 3
                     st.markdown(f"- **{dato['Característica']}**: Podría aumentar tu precio en ~{dato['Diff Precio']:.2f}€ y ventas en ~{int(dato['Diff Ventas'])} unidades/mes")
             else:
-                st.success("✅ ¡Tienes todas las características premium activadas!")
+                st.success("Tienes todas las características premium activadas.")
         
         st.markdown("---")
         
         # ========== SECCIÓN 4: DIAGNÓSTICO DE SALUD ==========
-        st.markdown("### 4️⃣ Diagnóstico de Salud del Producto")
+        st.markdown('<span class="section-heading-num">04</span><div class="section-heading">Diagnóstico de Salud</div>', unsafe_allow_html=True)
         st.caption("¿Cómo está mi producto?")
         
         # Calcular scores individuales
@@ -1221,29 +1617,32 @@ if st.session_state.producto_seleccionado_idx is not None:
         def crear_gauge(valor, titulo):
             """Crea un gauge chart"""
             if valor >= 70:
-                color = "green"
+                color = "#2ea84c"
                 estado = "BUENA"
             elif valor >= 40:
-                color = "orange"
+                color = "#d29922"
                 estado = "MEDIA"
             else:
-                color = "red"
+                color = "#e5534b"
                 estado = "BAJA"
             
             fig = go.Figure(go.Indicator(
                 mode="gauge+number",
                 value=valor,
-                title={'text': titulo, 'font': {'size': 16}},
+                title={'text': titulo, 'font': {'size': 13, 'color': '#8b9099', 'family': 'DM Sans'}},
+                number={'font': {'color': color, 'family': 'DM Mono', 'size': 32}},
                 gauge={
-                    'axis': {'range': [0, 100]},
+                    'axis': {'range': [0, 100], 'tickcolor': '#4a5260', 'tickfont': {'color': '#4a5260', 'size': 10}},
                     'bar': {'color': color},
+                    'bgcolor': '#111418',
+                    'bordercolor': '#21262d',
                     'steps': [
-                        {'range': [0, 40], 'color': "rgba(244, 67, 54, 0.2)"},
-                        {'range': [40, 70], 'color': "rgba(255, 193, 7, 0.2)"},
-                        {'range': [70, 100], 'color': "rgba(76, 175, 80, 0.2)"}
+                        {'range': [0, 40],  'color': 'rgba(229,83,75,0.08)'},
+                        {'range': [40, 70], 'color': 'rgba(210,153,34,0.08)'},
+                        {'range': [70, 100],'color': 'rgba(46,168,76,0.08)'}
                     ],
                     'threshold': {
-                        'line': {'color': "black", 'width': 4},
+                        'line': {'color': color, 'width': 2},
                         'thickness': 0.75,
                         'value': valor
                     }
@@ -1251,8 +1650,11 @@ if st.session_state.producto_seleccionado_idx is not None:
             ))
             
             fig.update_layout(
-                height=250,
-                margin=dict(l=20, r=20, t=50, b=20)
+                height=220,
+                margin=dict(l=20, r=20, t=50, b=10),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='#8b9099')
             )
             
             return fig, estado
@@ -1279,23 +1681,20 @@ if st.session_state.producto_seleccionado_idx is not None:
         
         # Semáforo general
         if score_general >= 70:
-            color_general = "green"
+            color_gen_hex = "#2ea84c"
             estado_general = "EXCELENTE"
-            emoji_general = "🟢"
         elif score_general >= 40:
-            color_general = "orange"
+            color_gen_hex = "#d29922"
             estado_general = "BUENA"
-            emoji_general = "🟡"
         else:
-            color_general = "red"
+            color_gen_hex = "#e5534b"
             estado_general = "NECESITA ATENCIÓN"
-            emoji_general = "🔴"
         
         st.markdown(f"""
-            <div style='text-align: center; padding: 30px; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); border-radius: 15px;'>
-                <h2 style='font-size: 3em; margin: 0;'>{emoji_general}</h2>
-                <h3 style='color: {color_general}; margin: 10px 0;'>SALUD GENERAL: {estado_general}</h3>
-                <p style='font-size: 2.5em; font-weight: bold; color: {color_general};'>{score_general:.0f}/100</p>
+            <div class="health-panel" style="border-color:{color_gen_hex}33;">
+                <div class="health-label" style="color:{color_gen_hex};">SALUD GENERAL</div>
+                <div class="health-score" style="color:{color_gen_hex};">{score_general:.0f}</div>
+                <div style="font-family:'DM Mono',monospace;font-size:0.7rem;color:#4a5260;margin-top:0.25rem;">/100 &nbsp;·&nbsp; {estado_general}</div>
             </div>
         """, unsafe_allow_html=True)
         
@@ -1305,47 +1704,48 @@ if st.session_state.producto_seleccionado_idx is not None:
         fortaleza_mejora_cols = st.columns(2)
         
         with fortaleza_mejora_cols[0]:
-            st.markdown("#### ✅ Fortalezas")
+            st.markdown('<p style="font-size:0.65rem;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:#4a5260;">Fortalezas</p>', unsafe_allow_html=True)
             
             if score_precio >= 70:
-                st.success(f"💰 Precio competitivo (Score: {score_precio:.0f})")
+                st.success(f"Precio competitivo (Score: {score_precio:.0f})")
             if score_calidad >= 70:
-                st.success(f"⭐ Buena calidad percibida (Score: {score_calidad:.0f})")
+                st.success(f"Buena calidad percibida (Score: {score_calidad:.0f})")
             if score_popularidad >= 70:
-                st.success(f"📈 Ventas sólidas (Score: {score_popularidad:.0f})")
+                st.success(f"Ventas sólidas (Score: {score_popularidad:.0f})")
             
             if score_precio < 70 and score_calidad < 70 and score_popularidad < 70:
                 st.info("Hay oportunidades de mejora en todas las áreas")
         
         with fortaleza_mejora_cols[1]:
-            st.markdown("#### ⚠️ Áreas de Mejora")
+            st.markdown('<p style="font-size:0.65rem;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:#4a5260;">Áreas de Mejora</p>', unsafe_allow_html=True)
             
             if score_precio < 70:
                 if percentil_precio > 75:
-                    st.warning(f"💰 Precio alto vs competencia (Percentil: {percentil_precio:.0f})")
+                    st.warning(f"Precio alto vs competencia (Percentil: {percentil_precio:.0f})")
                 else:
-                    st.warning(f"💰 Revisa tu estrategia de precio (Score: {score_precio:.0f})")
+                    st.warning(f"Revisa tu estrategia de precio (Score: {score_precio:.0f})")
             
             if score_calidad < 70:
                 if producto_seleccionado['product_rating'] < df_subtipo['product_rating'].mean():
-                    st.warning(f"⭐ Rating por debajo del promedio ({producto_seleccionado['product_rating']:.1f} vs {df_subtipo['product_rating'].mean():.1f})")
+                    st.warning(f"Rating por debajo del promedio ({producto_seleccionado['product_rating']:.1f} vs {df_subtipo['product_rating'].mean():.1f})")
                 if producto_seleccionado['reviews_real'] < df_subtipo['reviews_real'].mean():
-                    st.warning(f"💬 Pocas reviews ({int(producto_seleccionado['reviews_real'])} vs promedio: {int(df_subtipo['reviews_real'].mean())})")
+                    st.warning(f"Pocas reviews ({int(producto_seleccionado['reviews_real'])} vs promedio: {int(df_subtipo['reviews_real'].mean())})")
             
             if score_popularidad < 70:
-                st.warning(f"📊 Ventas por debajo del promedio (Percentil: {percentil_ventas_salud:.0f})")
+                st.warning(f"Ventas por debajo del promedio (Percentil: {percentil_ventas_salud:.0f})")
             
             if score_precio >= 70 and score_calidad >= 70 and score_popularidad >= 70:
-                st.success("¡Todo en orden! Sigue así 🚀")
+                st.success("Todo en orden. Sigue así.")
     
     # ==================== TAB 3: OPTIMIZAR PRECIO ====================
     elif st.session_state.selected_tab == 'optimizar':
-        st.markdown("## 💰 Optimizar Precio con IA")
+        st.markdown('<div class="section-label">Optimizar Precio con IA</div>', unsafe_allow_html=True)
+        st.markdown('<p style="font-size:0.8rem;color:#8b9099;margin-bottom:2rem;">Predicción de precio óptimo basada en condiciones de mercado</p>', unsafe_allow_html=True)
 
         col_button = st.columns([1, 2, 1])
         with col_button[1]:
             analizar = st.button(
-                "🚀 ANALIZAR PRECIO ÓPTIMO CON IA",
+                "ANALIZAR PRECIO ÓPTIMO CON IA",
                 use_container_width=True,
                 type="primary",
                 key="analyze_button"
@@ -1353,7 +1753,7 @@ if st.session_state.producto_seleccionado_idx is not None:
 
         if analizar:
             st.markdown("---")
-            st.markdown("## 🎯 Análisis de Precio Óptimo")
+            st.markdown("## Análisis de Precio Óptimo")
 
             # ----------------------------------------------------------
             # PAYLOAD — fila completa del producto
@@ -1385,7 +1785,7 @@ if st.session_state.producto_seleccionado_idx is not None:
                 else:
                     payload[col] = val
 
-            with st.spinner("🤖 Analizando mercado y competencia..."):
+            with st.spinner("Analizando mercado y competencia..."):
                 try:
                     response = requests.post(API_URL, json=payload)
 
@@ -1394,45 +1794,45 @@ if st.session_state.producto_seleccionado_idx is not None:
                         precio_predicho = data_api['predicted_price']
 
                         # --- RESULTADOS PRINCIPALES ---
-                        st.markdown("### 💰 Resultado del Análisis")
+                        st.markdown('<div class="section-label">Resultado del Análisis</div>', unsafe_allow_html=True)
 
-                        result_cols = st.columns([1, 1, 1, 1])
+                        result_cols = st.columns([1, 0.3, 1, 1])
 
                         with result_cols[0]:
-                            st.markdown("#### Precio Actual")
                             st.markdown(
-                                f"<p style='font-size:2.5em;color:#666;text-align:center;'>"
-                                f"{producto_seleccionado['precio_real']:.2f} €</p>",
+                                f'<div class="result-box">'
+                                f'<div class="result-box-label">Precio Actual</div>'
+                                f'<div class="result-box-value">{producto_seleccionado["precio_real"]:.2f} €</div>'
+                                f'</div>',
                                 unsafe_allow_html=True
                             )
 
                         with result_cols[1]:
-                            st.markdown("####  ")
                             st.markdown(
-                                "<p style='font-size:2.5em;text-align:center;'>→</p>",
+                                '<div class="result-arrow">→</div>',
                                 unsafe_allow_html=True
                             )
 
                         with result_cols[2]:
-                            st.markdown("#### Precio Sugerido IA")
                             st.markdown(
-                                f"<p style='font-size:2.5em;color:#FF9900;font-weight:bold;"
-                                f"text-align:center;'>{precio_predicho:.2f} €</p>",
+                                f'<div class="result-box" style="border-color:rgba(201,147,58,0.3);">'
+                                f'<div class="result-box-label">Precio Sugerido IA</div>'
+                                f'<div class="result-box-value gold">{precio_predicho:.2f} €</div>'
+                                f'</div>',
                                 unsafe_allow_html=True
                             )
 
                         with result_cols[3]:
                             diferencia        = precio_predicho - producto_seleccionado['precio_real']
                             porcentaje_cambio = (diferencia / producto_seleccionado['precio_real']) * 100
-                            color_diff        = "green" if diferencia > 0 else "red" if diferencia < 0 else "gray"
-                            signo             = "+" if diferencia > 0 else ""
-
-                            st.markdown("#### Diferencia")
+                            diff_color = "#2ea84c" if diferencia > 0 else "#e5534b" if diferencia < 0 else "#8b9099"
+                            signo      = "+" if diferencia > 0 else ""
                             st.markdown(
-                                f"<p style='font-size:2em;color:{color_diff};font-weight:bold;"
-                                f"text-align:center;'>{signo}{diferencia:.2f} €</p>"
-                                f"<p style='font-size:1.2em;color:{color_diff};"
-                                f"text-align:center;'>({porcentaje_cambio:+.1f}%)</p>",
+                                f'<div class="result-box" style="border-color:{diff_color}33;">'
+                                f'<div class="result-box-label">Diferencia</div>'
+                                f'<div class="result-box-value" style="color:{diff_color};font-size:1.8rem;">{signo}{diferencia:.2f} €</div>'
+                                f'<div style="font-family:\'DM Mono\',monospace;font-size:0.75rem;color:{diff_color};margin-top:0.25rem;">{porcentaje_cambio:+.1f}%</div>'
+                                f'</div>',
                                 unsafe_allow_html=True
                             )
 
@@ -1440,31 +1840,31 @@ if st.session_state.producto_seleccionado_idx is not None:
                         st.markdown("<br>", unsafe_allow_html=True)
                         if diferencia > 0:
                             st.success(
-                                f"📈 **Recomendación:** Hay margen para subir el precio. "
+                                f"**Recomendación:** Hay margen para subir el precio. "
                                 f"Podrías aumentarlo en {diferencia:.2f}€ según las condiciones del mercado."
                             )
                             ingresos_adicionales = diferencia * producto_seleccionado['ventas_mes_real']
                             st.info(
-                                f"💰 **Ingresos adicionales proyectados:** "
+                                f"**Ingresos adicionales proyectados:** "
                                 f"+{ingresos_adicionales:.2f} €/mes (asumiendo ventas constantes)"
                             )
                         elif diferencia < 0:
                             st.error(
-                                f"📉 **Recomendación:** Tu precio está por encima del mercado. "
+                                f"**Recomendación:** Tu precio está por encima del mercado. "
                                 f"Considera bajarlo en {abs(diferencia):.2f}€ para ser más competitivo."
                             )
-                            st.warning("⚠️ Un precio más bajo podría incrementar tus ventas y visibilidad.")
+                            st.warning("Un precio más bajo podría incrementar tus ventas y visibilidad.")
                         else:
-                            st.success("✅ **¡Perfecto!** Tu precio actual está alineado con el mercado.")
+                            st.success("**¡Perfecto!** Tu precio actual está alineado con el mercado.")
 
                         # --- ANÁLISIS DE COMPETENCIA ---
                         st.markdown("---")
-                        st.markdown("## 📊 Análisis de Competencia")
+                        st.markdown('<div class="section-label">Análisis de Competencia</div>', unsafe_allow_html=True)
 
                         tab1, tab2, tab3 = st.tabs([
-                            "🎯 Productos Similares (Precio)",
-                            "📈 Posicionamiento de Mercado",
-                            "📋 Estadísticas de Categoría"
+                            "Productos Similares (Precio)",
+                            "Posicionamiento de Mercado",
+                            "Estadísticas de Categoría"
                         ])
 
                         with tab1:
@@ -1506,13 +1906,10 @@ if st.session_state.producto_seleccionado_idx is not None:
                                 name='TU PRODUCTO',
                                 showlegend=True
                             )
-                            fig.update_layout(
-                                plot_bgcolor='rgba(240,240,240,0.5)',
-                                font=dict(size=12)
-                            )
+                            fig.update_layout(**PLOTLY_DARK)
                             st.plotly_chart(fig, use_container_width=True)
 
-                            with st.expander("📋 Ver detalles de productos similares"):
+                            with st.expander("Ver detalles de productos similares"):
                                 comparison_df = df_zoom[[
                                     'brand', 'subtype', 'category',
                                     'precio_real', 'ventas_mes_real',
@@ -1577,13 +1974,10 @@ if st.session_state.producto_seleccionado_idx is not None:
                                 annotation_text=f"Precio medio: {precio_medio:.2f}€",
                                 annotation_position="top"
                             )
-                            fig2.update_layout(
-                                plot_bgcolor='rgba(240,240,240,0.5)',
-                                font=dict(size=12)
-                            )
+                            fig2.update_layout(**PLOTLY_DARK)
                             st.plotly_chart(fig2, use_container_width=True)
 
-                            st.markdown("#### 📍 Tu Posicionamiento")
+                            st.markdown('<p style="font-size:0.65rem;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:#4a5260;margin-top:1rem;">Tu Posicionamiento</p>', unsafe_allow_html=True)
                             col_ins1, col_ins2, col_ins3, col_ins4 = st.columns(4)
 
                             with col_ins1:
@@ -1604,61 +1998,67 @@ if st.session_state.producto_seleccionado_idx is not None:
 
                         with tab3:
                             df_categoria = df[df['category'] == producto_seleccionado['category']]
-                            st.markdown("#### 📊 Estadísticas de tu Categoría")
+                            st.markdown("#### Estadísticas de tu Categoría")
 
                             stats_cols = st.columns(3)
                             with stats_cols[0]:
-                                st.markdown("##### 💰 Precios")
+                                st.markdown("##### Precios")
                                 st.metric("Precio Medio",   f"{df_categoria['precio_real'].mean():.2f} €")
                                 st.metric("Precio Mediano", f"{df_categoria['precio_real'].median():.2f} €")
                                 st.metric("Rango",
                                           f"{df_categoria['precio_real'].min():.2f} – "
                                           f"{df_categoria['precio_real'].max():.2f} €")
                             with stats_cols[1]:
-                                st.markdown("##### ⭐ Ratings")
+                                st.markdown("##### Ratings")
                                 st.metric("Rating Medio",   f"{df_categoria['product_rating'].mean():.2f}/5")
                                 st.metric("% Best Sellers",
                                           f"{(df_categoria['is_best_seller'] == 'Best Seller').sum() / len(df_categoria) * 100:.1f}%")
                             with stats_cols[2]:
-                                st.markdown("##### 📈 Ventas")
+                                st.markdown("##### Ventas")
                                 st.metric("Ventas Medias/mes", f"{int(df_categoria['ventas_mes_real'].mean())}")
                                 st.metric("Reviews Medias",    f"{int(df_categoria['reviews_real'].mean())}")
 
                             st.markdown("---")
-                            st.markdown("##### 📊 Distribución de Precios en la Categoría")
+                            st.markdown("##### Distribución de Precios en la Categoría")
                             fig_hist = px.histogram(
                                 df_categoria,
                                 x="precio_real",
                                 nbins=30,
                                 title=f"Distribución de precios en {producto_seleccionado['category']}",
                                 labels={"precio_real": "Precio (€)", "count": "Nº productos"},
-                                color_discrete_sequence=['#FF9900']
+                                color_discrete_sequence=['#c9933a']
                             )
+                            fig_hist.update_layout(**PLOTLY_DARK)
                             fig_hist.add_vline(
                                 x=producto_seleccionado['precio_real'],
-                                line_dash="dash", line_color="red",
+                                line_dash="dash", line_color="#e5534b",
                                 annotation_text="Tu Precio", annotation_position="top"
                             )
                             fig_hist.add_vline(
                                 x=precio_predicho,
-                                line_dash="dash", line_color="green",
+                                line_dash="dash", line_color="#2ea84c",
                                 annotation_text="Precio Sugerido", annotation_position="top"
                             )
                             st.plotly_chart(fig_hist, use_container_width=True)
 
                     else:
-                        st.error(f"❌ Error en la API: {response.text}")
+                        st.error(f"Error en la API: {response.text}")
 
                 except requests.exceptions.ConnectionError:
-                    st.error("⛔ Error de conexión. ¿Está encendida la API en el puerto 8001?")
+                    st.error("Error de conexión. ¿Está encendida la API en el puerto 8001?")
                 except Exception as e:
                     st.error(f"Error inesperado: {e}")
                     st.exception(e)
 
 else:
     # Mensaje cuando no hay producto seleccionado
-    st.info("👆 Selecciona un producto del catálogo superior para comenzar el análisis")
+    st.markdown("""
+        <div style='text-align:center;padding:4rem 2rem;'>
+            <p style='font-family:"DM Mono",monospace;font-size:0.7rem;letter-spacing:0.2em;color:#4a5260;text-transform:uppercase;'>
+                Selecciona un producto del catálogo para comenzar el análisis
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
 
 # --- FOOTER ---
-st.markdown("---")
-st.caption("🤖 Powered by Machine Learning | Amazon Price Optimizer v3.0")
+st.markdown('<div class="dash-footer">Powered by Machine Learning &nbsp;·&nbsp; Amazon Price Optimizer v3.0</div>', unsafe_allow_html=True)
