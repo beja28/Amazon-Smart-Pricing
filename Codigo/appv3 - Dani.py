@@ -705,8 +705,15 @@ for idx, producto in enumerate(st.session_state.productos_muestra):
             
             # Bloque de contenido: todo en HTML con alturas fijas para alineación perfecta
             badges_html = ''
-            if producto['is_best_seller'] == 'Yes':
+            badge_val = producto['is_best_seller']
+            if badge_val == 'Best Seller':
                 badges_html += '<span class="product-badge badge-bestseller">🏆 Best Seller</span>'
+            elif badge_val == "Amazon's Choice":
+                badges_html += '<span class="product-badge badge-buybox">✅ Amazon\'s Choice</span>'
+            elif badge_val == 'Limited time deal':
+                badges_html += '<span class="product-badge badge-coupon">⏰ Limited Deal</span>'
+            elif isinstance(badge_val, str) and badge_val.startswith('Save'):
+                badges_html += f'<span class="product-badge badge-sustainable">💸 {badge_val}</span>'
             if producto['has_coupon'] == 1:
                 badges_html += '<span class="product-badge badge-coupon">🎟️ Cupón</span>'
             if producto['buy_box_availability'] == 1:
@@ -807,8 +814,15 @@ if st.session_state.producto_seleccionado_idx is not None:
             unsafe_allow_html=True
         )
         badges = []
-        if producto_seleccionado['is_best_seller'] == 'Yes':
+        badge_val = producto_seleccionado['is_best_seller']
+        if badge_val == 'Best Seller':
             badges.append('<span class="product-badge badge-bestseller">🏆 Best Seller</span>')
+        elif badge_val == "Amazon's Choice":
+            badges.append('<span class="product-badge badge-buybox">✅ Amazon\'s Choice</span>')
+        elif badge_val == 'Limited time deal':
+            badges.append('<span class="product-badge badge-coupon">⏰ Limited Deal</span>')
+        elif isinstance(badge_val, str) and badge_val.startswith('Save'):
+            badges.append(f'<span class="product-badge badge-sustainable">💸 {badge_val}</span>')
         if producto_seleccionado['has_coupon'] == 1:
             badges.append('<span class="product-badge badge-coupon">🎟️ Cupón Activo</span>')
         if producto_seleccionado['buy_box_availability'] == 1:
@@ -907,8 +921,12 @@ if st.session_state.producto_seleccionado_idx is not None:
         
         # Calcular scores individuales (mismo método que Análisis de Mercado)
         # Score 1: Precio (mejor cerca de la mediana)
-        pct_precio   = (df_subtipo['precio_real'] <= producto_seleccionado['precio_real']).sum() / len(df_subtipo) * 100
-        score_precio = float(np.clip(100 - abs(pct_precio - 50) * 2, 0, 100))
+        pct_precio = (df_subtipo['precio_real'] <= producto_seleccionado['precio_real']).sum() / len(df_subtipo) * 100
+        if pct_precio <= 50:
+            score_precio = 100 - (50 - pct_precio) * 0.6
+        else:
+            score_precio = 100 - (pct_precio - 50) * 2.0
+        score_precio = float(np.clip(score_precio, 0, 100))
 
 
         # --- SCORE CALIDAD: rating bayesiano (suaviza productos con pocas reviews)
@@ -1257,8 +1275,8 @@ if st.session_state.producto_seleccionado_idx is not None:
             # Métricas comparativas
             col_sp1, col_sp2, col_sp3 = st.columns(3)
             
-            patrocinados = df_categoria[df_categoria['is_sponsored'] == 'Yes']
-            no_patrocinados = df_categoria[df_categoria['is_sponsored'] == 'No']
+            patrocinados = df_categoria[df_categoria['is_sponsored'] == 'Sponsored']
+            no_patrocinados = df_categoria[df_categoria['is_sponsored'] == 'Organic']
             
             with col_sp1:
                 if len(patrocinados) > 0 and len(no_patrocinados) > 0:
@@ -1327,7 +1345,7 @@ if st.session_state.producto_seleccionado_idx is not None:
                 'Rating': f"{comp['product_rating']:.1f} ⭐",
                 'Ventas/mes': int(comp['ventas_mes_real']),
                 'Reviews': int(comp['reviews_real']),
-                'Best Seller': '🏆' if comp['is_best_seller'] == 'Yes' else '',
+                'Badge': comp['is_best_seller'] if comp['is_best_seller'] != 'No Badge' else '',
                 'Cupón': '🎟️' if comp['has_coupon'] == 1 else '',
                 'Buy Box': '📦' if comp['buy_box_availability'] == 1 else '',
                 'Premium': '👑' if comp['is_premium_brand'] else '',
@@ -1396,7 +1414,7 @@ if st.session_state.producto_seleccionado_idx is not None:
         
         # Análisis de características
         caracteristicas_analisis = {
-            'Best Seller': ('is_best_seller', 'Yes'),
+            'Best Seller': ('is_best_seller', 'Best Seller'),
             'Cupón': ('has_coupon', 1),
             'Buy Box': ('buy_box_availability', 1),
             'Sostenible': ('sustainability_tags', 1),
@@ -1524,8 +1542,12 @@ if st.session_state.producto_seleccionado_idx is not None:
         
         # Calcular scores individuales
         # Score 1: Precio (percentil de precio competitivo)
-        pct_precio    = (df_subtipo['precio_real'] <= producto_seleccionado['precio_real']).sum() / len(df_subtipo) * 100
-        score_precio  = float(np.clip(100 - abs(pct_precio - 50) * 2, 0, 100))
+        pct_precio = (df_subtipo['precio_real'] <= producto_seleccionado['precio_real']).sum() / len(df_subtipo) * 100
+        if pct_precio <= 50:
+            score_precio = 100 - (50 - pct_precio) * 0.6
+        else:
+            score_precio = 100 - (pct_precio - 50) * 2.0
+        score_precio = float(np.clip(score_precio, 0, 100))
 
 
         # Score 2: Calidad — rating bayesiano
@@ -1608,20 +1630,19 @@ if st.session_state.producto_seleccionado_idx is not None:
             st.markdown(f"<p style='text-align: center; font-weight: bold;'>{estado_popularidad}</p>", unsafe_allow_html=True)
         
         # Score general
-        score_general = (score_precio + score_calidad + score_popularidad) / 3
+        score_general = 0.6 * ((score_precio + score_calidad + score_popularidad) / 3) \
+                    + 0.4 * min(score_precio, score_calidad, score_popularidad)
+        score_general = float(np.clip(score_general, 0, 100))
         
         st.markdown("---")
         
         # Semáforo general
-        if score_general >= 70:
-            color_gen_hex = "#2ea84c"
-            estado_general = "EXCELENTE"
-        elif score_general >= 40:
-            color_gen_hex = "#d29922"
-            estado_general = "BUENA"
+        if min(score_precio, score_calidad, score_popularidad) >= 70:
+            color_gen_hex = "#2ea84c"; estado_general = "EXCELENTE"
+        elif score_general >= 55 and min(score_precio, score_calidad, score_popularidad) >= 40:
+            color_gen_hex = "#d29922"; estado_general = "BUENA"
         else:
-            color_gen_hex = "#e5534b"
-            estado_general = "NECESITA ATENCIÓN"
+            color_gen_hex = "#e5534b"; estado_general = "NECESITA ATENCIÓN"
         
         st.markdown(f"""
             <div class="health-panel" style="border-color:{color_gen_hex}33;">
