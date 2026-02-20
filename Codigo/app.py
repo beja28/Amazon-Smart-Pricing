@@ -939,6 +939,7 @@ if st.session_state.producto_seleccionado_idx is not None:
     if st.session_state.selected_tab == 'resumen':
         st.markdown('<div class="section-label">Resumen del Producto</div>', unsafe_allow_html=True)
         
+        # KPIs comparativos - Filtrar por categoría Y subtipo
         df_categoria = df[df['category'] == producto_seleccionado['category']]
         df_subtipo = df[df['subtype'] == producto_seleccionado['subtype']]
         
@@ -986,32 +987,53 @@ if st.session_state.producto_seleccionado_idx is not None:
         st.markdown("---")
         st.markdown('<div class="section-label">Diagnóstico Rápido</div>', unsafe_allow_html=True)
         
-        percentil_precio = (df_subtipo['precio_real'] <= producto_seleccionado['precio_real']).sum() / len(df_subtipo) * 100
-        score_precio = 100 - abs(percentil_precio - 50) * 2
-        score_precio = max(0, min(100, score_precio))
-
-        max_rating = df_subtipo['product_rating'].max()
-        score_rating = (producto_seleccionado['product_rating'] / max_rating) * 100
-
-        percentil_reviews = (df_subtipo['reviews_real'] <= producto_seleccionado['reviews_real']).sum() / len(df_subtipo) * 100
-        bonus_reviews = (percentil_reviews / 100) * 10
-        score_calidad = min(100, score_rating + bonus_reviews)
-
-        percentil_ventas = (df_subtipo['ventas_mes_real'] <= producto_seleccionado['ventas_mes_real']).sum() / len(df_subtipo) * 100
-        score_popularidad = percentil_ventas
-
-        score_salud = (score_precio + score_calidad + score_popularidad) / 3
-        
-        if score_salud >= 70:
-            color_hex = "#2ea84c"
-            status = "EXCELENTE"
-        elif score_salud >= 40:
-            color_hex = "#d29922"
-            status = "BUENA"
+        # Calcular scores individuales (mismo método que Análisis de Mercado)
+        # Score 1: Precio (mejor cerca de la mediana)
+        pct_precio = (df_subtipo['precio_real'] <= producto_seleccionado['precio_real']).sum() / len(df_subtipo) * 100
+        if pct_precio <= 50:
+            score_precio = 100 - (50 - pct_precio) * 0.6
         else:
-            color_hex = "#e5534b"
-            status = "NECESITA ATENCIÓN"
+            score_precio = 100 - (pct_precio - 50) * 2.0
+        score_precio = float(np.clip(score_precio, 0, 100))
+
+
+        # --- SCORE CALIDAD: rating bayesiano (suaviza productos con pocas reviews)
+        # m=50 significa que necesitas 50 reviews para que tu rating cuente al 50%
+        m = 50
+        C = float(df_subtipo['product_rating'].mean())          # media del subtipo (prior)
+        r = float(producto_seleccionado['product_rating'])
+        v = float(producto_seleccionado['reviews_real'])
+        bayes_rating  = (v / (v + m)) * r + (m / (v + m)) * C  # rating ajustado
+        score_calidad = float(np.clip((bayes_rating - 1) / 4 * 100, 0, 100))  # escala 1-5 → 0-100
+
+
+        # --- SCORE POPULARIDAD: percentil en log(ventas), menos sesgo por outliers
+        ventas_log    = np.log1p(df_subtipo['ventas_mes_real'].clip(lower=0))
+        ventas_log_ps = np.log1p(max(0.0, float(producto_seleccionado['ventas_mes_real'])))
+        score_popularidad = float((ventas_log <= ventas_log_ps).mean() * 100)
+
+
+        # --- SCORE GENERAL: 60% promedio + 40% peor dimensión
+        # Si la peor dimensión está en rojo (<40), arrastra el resultado hacia abajo
+        score_general = 0.6 * ((score_precio + score_calidad + score_popularidad) / 3) \
+                    + 0.4 * min(score_precio, score_calidad, score_popularidad)
+        score_general = float(np.clip(score_general, 0, 100))
         
+        # Determinar color
+        if min(score_precio, score_calidad, score_popularidad) >= 70:
+            color = "green";  status = "EXCELENTE"; emoji = "🟢"
+        elif score_general >= 55 and min(score_precio, score_calidad, score_popularidad) >= 40:
+            color = "orange"; status = "BUENA";     emoji = "🟡"
+        else:
+            color = "red";    status = "NECESITA ATENCIÓN"; emoji = "🔴"
+
+        # Convertir color lógico a HEX (para el estilo del panel)
+        COLOR_MAP = {"green": "#2ea84c", "orange": "#d29922", "red": "#e5534b"}
+        color_hex = COLOR_MAP[color]
+
+        # Si tu HTML usa score_salud, asígnalo (o cambia el HTML a score_general)
+        score_salud = score_general
+
         st.markdown(f"""
             <div class="health-panel" style="border-color:{color_hex}33;">
                 <div class="health-label" style="color:{color_hex};">SALUD DEL PRODUCTO</div>
@@ -1022,6 +1044,7 @@ if st.session_state.producto_seleccionado_idx is not None:
         
         st.markdown("<br>", unsafe_allow_html=True)
         
+        # Detalles
         detail_cols = st.columns(3)
         
         with detail_cols[0]:
@@ -1057,149 +1080,300 @@ if st.session_state.producto_seleccionado_idx is not None:
         st.markdown('<p style="font-size:0.8rem;color:#8b9099;margin-bottom:2rem;">Entiende tu posición competitiva y oportunidades de mejora</p>', unsafe_allow_html=True)
         st.markdown("---")
         
+        # Obtener datos de la categoría y subtipo
         df_categoria = df[df['category'] == producto_seleccionado['category']]
         df_subtipo = df[df['subtype'] == producto_seleccionado['subtype']]
         
-        st.markdown('<span class="section-heading-num">01</span><div class="section-heading">Tu Posición en el Mercado</div>', unsafe_allow_html=True)
+                # ========== SECCIÓN 1: TU POSICIÓN EN EL MERCADO ==========
+        st.markdown("### 1️⃣ Tu Posición en el Mercado")
         st.caption("¿Dónde estoy yo en mi subtipo?")
-        
-        precio_medio_sub = df_subtipo['precio_real'].median()
-        ventas_medio_sub = df_subtipo['ventas_mes_real'].median()
-        
+
+        # Cuartiles P25 y P75
+        precio_p25 = df_subtipo['precio_real'].quantile(0.25)
+        precio_p75 = df_subtipo['precio_real'].quantile(0.75)
+        ventas_p25 = df_subtipo['ventas_mes_real'].quantile(0.25)
+        ventas_p75 = df_subtipo['ventas_mes_real'].quantile(0.75)
+
+        x_min = df_subtipo['precio_real'].min() * 0.9
+        x_max = df_subtipo['precio_real'].max() * 1.1
+        y_min = df_subtipo['ventas_mes_real'].min() * 0.9
+        y_max = df_subtipo['ventas_mes_real'].max() * 1.1
+
         fig1 = go.Figure()
-        
-        fig1.add_shape(type="rect", x0=precio_medio_sub, y0=ventas_medio_sub,
-            x1=df_subtipo['precio_real'].max()*1.1, y1=df_subtipo['ventas_mes_real'].max()*1.1,
-            fillcolor="rgba(76,175,80,0.1)", line=dict(width=0), layer="below")
-        fig1.add_shape(type="rect", x0=df_subtipo['precio_real'].min()*0.9, y0=ventas_medio_sub,
-            x1=precio_medio_sub, y1=df_subtipo['ventas_mes_real'].max()*1.1,
-            fillcolor="rgba(33,150,243,0.1)", line=dict(width=0), layer="below")
-        fig1.add_shape(type="rect", x0=df_subtipo['precio_real'].min()*0.9, y0=df_subtipo['ventas_mes_real'].min()*0.9,
-            x1=precio_medio_sub, y1=ventas_medio_sub,
-            fillcolor="rgba(255,193,7,0.1)", line=dict(width=0), layer="below")
-        fig1.add_shape(type="rect", x0=precio_medio_sub, y0=df_subtipo['ventas_mes_real'].min()*0.9,
-            x1=df_subtipo['precio_real'].max()*1.1, y1=ventas_medio_sub,
-            fillcolor="rgba(244,67,54,0.1)", line=dict(width=0), layer="below")
-        
-        fig1.add_trace(go.Scatter(x=df_subtipo['precio_real'], y=df_subtipo['ventas_mes_real'],
+
+        # 9 zonas (x0, y0, x1, y1, color_fondo, etiqueta, color_texto)
+        zonas = [
+            (x_min,      ventas_p75, precio_p25, y_max,      "rgba(33,150,243,0.12)",  "🔵 OPORTUNIDAD", "blue"),
+            (precio_p25, ventas_p75, precio_p75, y_max,      "rgba(76,175,80,0.12)",   "🟢 EFICIENTE",   "green"),
+            (precio_p75, ventas_p75, x_max,      y_max,      "rgba(255,215,0,0.20)",   "🏆 PREMIUM",     "goldenrod"),
+            (x_min,      ventas_p25, precio_p25, ventas_p75, "rgba(255,193,7,0.12)",   "🟡 COMPETITIVA", "orange"),
+            (precio_p25, ventas_p25, precio_p75, ventas_p75, "rgba(200,200,200,0.12)", "⚪ ESTÁNDAR",    "gray"),
+            (precio_p75, ventas_p25, x_max,      ventas_p75, "rgba(255,87,34,0.12)",   "🟠 CARA",        "darkorange"),
+            (x_min,      y_min,      precio_p25, ventas_p25, "rgba(244,67,54,0.12)",   "🔴 DESCARTADA",  "red"),
+            (precio_p25, y_min,      precio_p75, ventas_p25, "rgba(244,67,54,0.12)",   "🔴 RIESGO",      "red"),
+            (precio_p75, y_min,      x_max,      ventas_p25, "rgba(183,28,28,0.20)",   "🔴 RIESGO ALTO", "darkred"),
+        ]
+
+        for x0, y0, x1, y1, color, etiqueta, color_texto in zonas:
+            fig1.add_shape(
+                type="rect", x0=x0, y0=y0, x1=x1, y1=y1,
+                fillcolor=color, line=dict(width=0), layer="below"
+            )
+            fig1.add_annotation(
+                x=(x0 + x1) / 2, y=(y0 + y1) / 2, text=etiqueta,
+                showarrow=False,
+                font=dict(size=11, color=color_texto, family="Arial Black"),
+                bgcolor="white", bordercolor=color_texto, borderwidth=1.5, opacity=0.85
+            )
+
+        # 4 líneas de cuartiles (punteadas)
+        for val, eje, label, pos in [
+            (precio_p25, "v", f"P25 precio: {precio_p25:.0f}€", "top"),
+            (precio_p75, "v", f"P75 precio: {precio_p75:.0f}€", "top"),
+            (ventas_p25, "h", f"P25 ventas: {ventas_p25:.0f}",  "right"),
+            (ventas_p75, "h", f"P75 ventas: {ventas_p75:.0f}",  "right"),
+        ]:
+            if eje == "v":
+                fig1.add_vline(x=val, line_dash="dot", line_color="gray",
+                               annotation_text=label, annotation_position=pos)
+            else:
+                fig1.add_hline(y=val, line_dash="dot", line_color="gray",
+                               annotation_text=label, annotation_position=pos)
+
+        # Competidores
+        fig1.add_trace(go.Scatter(
+            x=df_subtipo['precio_real'], y=df_subtipo['ventas_mes_real'],
             mode='markers', marker=dict(size=8, color='lightgray', opacity=0.5),
-            text=df_subtipo['brand']+' '+df_subtipo['subtype'],
+            text=df_subtipo['brand'] + ' ' + df_subtipo['subtype'],
             hovertemplate='<b>%{text}</b><br>Precio: %{x:.2f}€<br>Ventas: %{y:.0f}<extra></extra>',
-            name='Competidores', showlegend=True))
-        
-        fig1.add_trace(go.Scatter(x=[producto_seleccionado['precio_real']], y=[producto_seleccionado['ventas_mes_real']],
-            mode='markers+text', marker=dict(size=25, color='red', symbol='star', line=dict(width=2, color='white')),
+            name='Competidores', showlegend=True
+        ))
+
+        # Tu producto
+        fig1.add_trace(go.Scatter(
+            x=[producto_seleccionado['precio_real']],
+            y=[producto_seleccionado['ventas_mes_real']],
+            mode='markers+text',
+            marker=dict(size=25, color='red', symbol='star', line=dict(width=2, color='white')),
             text=['TÚ'], textposition='top center',
             textfont=dict(size=14, color='red', family='Arial Black'),
             hovertemplate=f'<b>TU PRODUCTO</b><br>Precio: {producto_seleccionado["precio_real"]:.2f}€<br>Ventas: {int(producto_seleccionado["ventas_mes_real"])}<extra></extra>',
-            name='Tu Producto', showlegend=True))
-        
-        fig1.add_hline(y=ventas_medio_sub, line_dash="dash", line_color="gray",
-            annotation_text=f"Ventas mediana: {int(ventas_medio_sub)}", annotation_position="right")
-        fig1.add_vline(x=precio_medio_sub, line_dash="dash", line_color="gray",
-            annotation_text=f"Precio mediano: {precio_medio_sub:.2f}€", annotation_position="top")
-        
-        for txt, x, y, color in [
-            ("🟢 ZONA IDEAL",    df_subtipo['precio_real'].max()*0.95, df_subtipo['ventas_mes_real'].max()*0.95,    "green"),
-            ("🔵 OPORTUNIDAD",   df_subtipo['precio_real'].min()*1.05, df_subtipo['ventas_mes_real'].max()*0.95,    "blue"),
-            ("🔴 RIESGO",        df_subtipo['precio_real'].max()*0.95, df_subtipo['ventas_mes_real'].min()*1.05,    "red"),
-            ("🟡 COMPETITIVA",   df_subtipo['precio_real'].min()*1.05, df_subtipo['ventas_mes_real'].min()*1.05,    "orange"),
-        ]:
-            fig1.add_annotation(x=x, y=y, text=txt, showarrow=False,
-                font=dict(size=12, color=color, family="Arial Black"),
-                bgcolor="white", bordercolor=color, borderwidth=2)
-        
-        fig1.update_layout(title=f"Mapa de Posicionamiento: {producto_seleccionado['subtype']}",
-            xaxis_title="Precio (€)", yaxis_title="Ventas último mes",
-            height=600, hovermode='closest', showlegend=True, **PLOTLY_DARK)
+            name='Tu Producto', showlegend=True
+        ))
+
+        fig1.update_layout(
+            title=f"Mapa de Posicionamiento: {producto_seleccionado['subtype']}",
+            xaxis_title="Precio (€)",
+            yaxis_title="Ventas último mes",
+            height=600,
+            hovermode='closest',
+            showlegend=True,
+            **PLOTLY_DARK
+        )
         st.plotly_chart(fig1, use_container_width=True)
-        
-        if producto_seleccionado['precio_real'] >= precio_medio_sub and producto_seleccionado['ventas_mes_real'] >= ventas_medio_sub:
-            zona="🟢 ZONA IDEAL"; mensaje="¡Excelente! Estás en la zona premium con buen volumen de ventas."; tipo="success"
-        elif producto_seleccionado['precio_real'] < precio_medio_sub and producto_seleccionado['ventas_mes_real'] >= ventas_medio_sub:
-            zona="🔵 ZONA OPORTUNIDAD"; mensaje="Vendes bien pero tu precio está por debajo. Considera subirlo gradualmente."; tipo="info"
-        elif producto_seleccionado['precio_real'] >= precio_medio_sub and producto_seleccionado['ventas_mes_real'] < ventas_medio_sub:
-            zona="🔴 ZONA RIESGO"; mensaje="Precio alto pero ventas bajas. Considera bajar precio o mejorar el producto."; tipo="error"
-        else:
-            zona="🟡 ZONA COMPETITIVA"; mensaje="Precio y ventas en rango medio. Hay oportunidad de diferenciarte."; tipo="warning"
-        
+
+        # Insight automático — 9 zonas con cuartiles
+        precio_ps = producto_seleccionado['precio_real']
+        ventas_ps = producto_seleccionado['ventas_mes_real']
+
+        if precio_ps < precio_p25:    banda_precio = "bajo"
+        elif precio_ps < precio_p75:  banda_precio = "medio"
+        else:                         banda_precio = "alto"
+
+        if ventas_ps >= ventas_p75:   banda_ventas = "alta"
+        elif ventas_ps >= ventas_p25: banda_ventas = "media"
+        else:                         banda_ventas = "baja"
+
+        mensajes_zona = {
+            ("bajo",  "alta"):  ("🔵 OPORTUNIDAD",  "info",    "Vendes muy bien con precio bajo. Tienes margen para subir precio y mejorar margen sin perder ventas."),
+            ("medio", "alta"):  ("🟢 EFICIENTE",    "success", "Buena combinación precio-volumen. Posición sólida y sostenible en el mercado."),
+            ("alto",  "alta"):  ("🏆 PREMIUM",      "success", "¡Máximo rendimiento! Precio alto y ventas altas. Protege este posicionamiento."),
+            ("bajo",  "media"): ("🟡 COMPETITIVA",  "warning", "Precio bajo con ventas medias. Analiza si el margen cubre costes o si hay margen de subida."),
+            ("medio", "media"): ("⚪ ESTÁNDAR",     "info",    "Posición media en todo. Diferenciarte (cupón, Buy Box, reviews) es clave para crecer."),
+            ("alto",  "media"): ("🟠 CARA",         "warning", "Precio alto pero ventas mediocres. El mercado no está justificando el precio actual."),
+            ("bajo",  "baja"):  ("🔴 DESCARTADA",   "error",   "Precio bajo y pocas ventas. Revisa visibilidad, título y ficha del producto."),
+            ("medio", "baja"):  ("🔴 RIESGO",       "error",   "Ventas bajas sin ventaja de precio. Necesitas acción urgente en alguna dimensión."),
+            ("alto",  "baja"):  ("🔴 RIESGO ALTO",  "error",   "Precio alto con ventas bajas: la peor combinación. Baja el precio inmediatamente."),
+        }
+
+        zona, tipo_msg, mensaje = mensajes_zona[(banda_precio, banda_ventas)]
+
         insight_cols = st.columns([2, 1])
         with insight_cols[0]:
-            getattr(st, tipo)(f"📍 **Tu producto está en: {zona}**\n\n{mensaje}")
+            if tipo_msg == "success": st.success(f"📍 **Tu producto está en: {zona}**\n\n{mensaje}")
+            elif tipo_msg == "info":  st.info(f"📍 **Tu producto está en: {zona}**\n\n{mensaje}")
+            elif tipo_msg == "error": st.error(f"📍 **Tu producto está en: {zona}**\n\n{mensaje}")
+            else:                     st.warning(f"📍 **Tu producto está en: {zona}**\n\n{mensaje}")
+
         with insight_cols[1]:
-            rango_min = producto_seleccionado['precio_real'] * 0.9
-            rango_max = producto_seleccionado['precio_real'] * 1.1
-            competidores_rango = df_subtipo[(df_subtipo['precio_real'] >= rango_min) & (df_subtipo['precio_real'] <= rango_max)]
-            st.metric("Competidores en tu rango", len(competidores_rango), help="Productos con precio ±10% del tuyo")
-            percentil_ventas = (df_subtipo['ventas_mes_real'] < producto_seleccionado['ventas_mes_real']).sum() / len(df_subtipo) * 100
-            st.metric("Percentil de ventas", f"{percentil_ventas:.0f}%", help="% de productos que venden menos que tú")
+            rango_min = precio_ps * 0.9
+            rango_max = precio_ps * 1.1
+            competidores_rango = df_subtipo[
+                (df_subtipo['precio_real'] >= rango_min) & (df_subtipo['precio_real'] <= rango_max)
+            ]
+            st.metric("Competidores en tu rango", len(competidores_rango),
+                      help="Productos con precio ±10% del tuyo")
+            percentil_ventas = (df_subtipo['ventas_mes_real'] < ventas_ps).sum() / len(df_subtipo) * 100
+            st.metric("Percentil de ventas", f"{percentil_ventas:.0f}%",
+                      help="% de productos que venden menos que tú")
         
         st.markdown("---")
+        
+               
+        # ========== GRÁFICO ADICIONAL: DISTRIBUCIÓN POR CATEGORÍA ==========
         st.markdown("### Análisis por Categoría y Subtipo")
         
+        # Tabs para diferentes vistas
         analisis_tabs = st.tabs(["Por Categoría", "Por Subtipo", "Productos Patrocinados"])
         
         with analisis_tabs[0]:
             st.markdown("#### Precios Promedio por Categoría")
-            categoria_stats = df.groupby('category').agg({'precio_real':'mean','ventas_mes_real':'mean','product_rating':'mean'}).reset_index()
+            
+            # Agrupar por categoría
+            categoria_stats = df.groupby('category').agg({
+                'precio_real': 'mean',
+                'ventas_mes_real': 'mean',
+                'product_rating': 'mean'
+            }).reset_index()
             categoria_stats = categoria_stats.sort_values('precio_real', ascending=False)
-            fig_cat = px.bar(categoria_stats, x='category', y='precio_real',
+            
+            fig_cat = px.bar(
+                categoria_stats,
+                x='category',
+                y='precio_real',
                 title='Precio Promedio por Categoría',
-                labels={'precio_real':'Precio Promedio (€)','category':'Categoría'},
-                color='precio_real', color_continuous_scale='Viridis', height=400)
+                labels={'precio_real': 'Precio Promedio (€)', 'category': 'Categoría'},
+                color='precio_real',
+                color_continuous_scale='Viridis',
+                height=400
+            )
             fig_cat.update_layout(**PLOTLY_DARK)
+            
+            # Marcar tu categoría
             tu_categoria_idx = categoria_stats[categoria_stats['category'] == producto_seleccionado['category']].index
             if len(tu_categoria_idx) > 0:
-                fig_cat.add_annotation(x=producto_seleccionado['category'],
+                fig_cat.add_annotation(
+                    x=producto_seleccionado['category'],
                     y=categoria_stats.loc[tu_categoria_idx[0], 'precio_real'],
-                    text="TU CATEGORÍA", showarrow=True, arrowhead=2,
-                    arrowcolor="#c9933a", font=dict(color="#c9933a", size=11, family="DM Sans"))
+                    text="TU CATEGORÍA",
+                    showarrow=True,
+                    arrowhead=2,
+                    arrowcolor="#c9933a",
+                    font=dict(color="#c9933a", size=11, family="DM Sans")
+                )
+            
             st.plotly_chart(fig_cat, use_container_width=True)
         
         with analisis_tabs[1]:
             st.markdown("#### Precios Promedio por Subtipo en tu Categoría")
-            subtipo_stats = df_categoria.groupby('subtype').agg({'precio_real':'mean','ventas_mes_real':'mean','product_rating':'mean'}).reset_index()
+            
+            # Filtrar por categoría y agrupar por subtipo
+            subtipo_stats = df_categoria.groupby('subtype').agg({
+                'precio_real': 'mean',
+                'ventas_mes_real': 'mean',
+                'product_rating': 'mean'
+            }).reset_index()
             subtipo_stats = subtipo_stats.sort_values('precio_real', ascending=False)
-            fig_sub = px.bar(subtipo_stats, x='subtype', y='precio_real',
+            
+            fig_sub = px.bar(
+                subtipo_stats,
+                x='subtype',
+                y='precio_real',
                 title=f'Precio Promedio por Subtipo en {producto_seleccionado["category"]}',
-                labels={'precio_real':'Precio Promedio (€)','subtype':'Subtipo'},
-                color='precio_real', color_continuous_scale='Cividis', height=400)
+                labels={'precio_real': 'Precio Promedio (€)', 'subtype': 'Subtipo'},
+                color='precio_real',
+                color_continuous_scale='Cividis',
+                height=400
+            )
             fig_sub.update_layout(**PLOTLY_DARK)
+            
+            # Marcar tu subtipo
             tu_subtipo_idx = subtipo_stats[subtipo_stats['subtype'] == producto_seleccionado['subtype']].index
             if len(tu_subtipo_idx) > 0:
-                fig_sub.add_annotation(x=producto_seleccionado['subtype'],
+                fig_sub.add_annotation(
+                    x=producto_seleccionado['subtype'],
                     y=subtipo_stats.loc[tu_subtipo_idx[0], 'precio_real'],
-                    text="TU SUBTIPO", showarrow=True, arrowhead=2,
-                    arrowcolor="#c9933a", font=dict(color="#c9933a", size=11, family="DM Sans"))
+                    text="TU SUBTIPO",
+                    showarrow=True,
+                    arrowhead=2,
+                    arrowcolor="#c9933a",
+                    font=dict(color="#c9933a", size=11, family="DM Sans")
+                )
+            
             st.plotly_chart(fig_sub, use_container_width=True)
         
         with analisis_tabs[2]:
             st.markdown("#### Análisis de Productos Patrocinados en tu Categoría")
-            sponsored_stats = df_categoria.groupby('is_sponsored').agg({'precio_real':'mean','ventas_mes_real':'mean','product_rating':'mean'}).reset_index()
-            sponsored_stats['is_sponsored'] = sponsored_stats['is_sponsored'].map({'Yes':'Patrocinados','No':'No Patrocinados'})
+            
+            # Comparar patrocinados vs no patrocinados
+            sponsored_stats = df_categoria.groupby('is_sponsored').agg({
+                'precio_real': 'mean',
+                'ventas_mes_real': 'mean',
+                'product_rating': 'mean'
+            }).reset_index()
+            
+            sponsored_stats['is_sponsored'] = sponsored_stats['is_sponsored'].map({
+                'Sponsored': 'Patrocinados',
+                'Organic': 'No Patrocinados'
+            })
+
+            
             fig_sponsored = go.Figure()
-            fig_sponsored.add_trace(go.Bar(name='Precio Promedio', x=sponsored_stats['is_sponsored'], y=sponsored_stats['precio_real'],
-                text=[f"{p:.2f}€" for p in sponsored_stats['precio_real']], textposition='outside',
-                marker_color=['#ff5722','#2196F3']))
+            
+            fig_sponsored.add_trace(go.Bar(
+                name='Precio Promedio',
+                x=sponsored_stats['is_sponsored'],
+                y=sponsored_stats['precio_real'],
+                text=[f"{p:.2f}€" for p in sponsored_stats['precio_real']],
+                textposition='outside',
+                marker_color=['#ff5722', '#2196F3']
+            ))
+            
             fig_sponsored.update_layout(
-                title=f'Comparación: Patrocinados vs No Patrocinados en {producto_seleccionado["category"]}',
-                xaxis_title='Tipo', yaxis_title='Precio Promedio (€)', height=400, showlegend=False, **PLOTLY_DARK)
+                title=f'Comparación: Productos Patrocinados vs No Patrocinados en {producto_seleccionado["category"]}',
+                xaxis_title='Tipo',
+                yaxis_title='Precio Promedio (€)',
+                height=400,
+                showlegend=False,
+                **PLOTLY_DARK
+            )
+            
             st.plotly_chart(fig_sponsored, use_container_width=True)
+            
+            # Métricas comparativas
             col_sp1, col_sp2, col_sp3 = st.columns(3)
-            patrocinados = df_categoria[df_categoria['is_sponsored'] == 'Yes']
-            no_patrocinados = df_categoria[df_categoria['is_sponsored'] == 'No']
+            
+            patrocinados = df_categoria[df_categoria['is_sponsored'] == 'Sponsored']
+            no_patrocinados = df_categoria[df_categoria['is_sponsored'] == 'Organic']
+            
             with col_sp1:
                 if len(patrocinados) > 0 and len(no_patrocinados) > 0:
                     diff_precio_sp = patrocinados['precio_real'].mean() - no_patrocinados['precio_real'].mean()
-                    st.metric("Diferencia de Precio", f"{diff_precio_sp:+.2f} €")
+                    st.metric(
+                        "Diferencia de Precio",
+                        f"{diff_precio_sp:+.2f} €",
+                        help="Los patrocinados cuestan más/menos en promedio"
+                    )
+            
             with col_sp2:
                 if len(patrocinados) > 0 and len(no_patrocinados) > 0:
                     diff_ventas_sp = patrocinados['ventas_mes_real'].mean() - no_patrocinados['ventas_mes_real'].mean()
-                    st.metric("Diferencia de Ventas", f"{diff_ventas_sp:+.0f} uds/mes")
+                    st.metric(
+                        "Diferencia de Ventas",
+                        f"{diff_ventas_sp:+.0f} uds/mes",
+                        help="Los patrocinados venden más/menos en promedio"
+                    )
+            
             with col_sp3:
-                pct_patrocinados = (df_categoria['is_sponsored'] == 'Yes').sum() / len(df_categoria) * 100
-                st.metric("% Patrocinados", f"{pct_patrocinados:.1f}%")
-            if producto_seleccionado['is_sponsored'] == 'Yes':
+                pct_patrocinados = (df_categoria['is_sponsored'] == 'Sponsored').mean() * 100
+                st.metric(
+                    "% Patrocinados",
+                    f"{pct_patrocinados:.1f}%",
+                    help="Porcentaje de productos patrocinados en tu categoría"
+                )
+            
+            # Insight
+            if producto_seleccionado['is_sponsored'] == 'Sponsored':
                 st.info("Tu producto está patrocinado. Esto puede aumentar tu visibilidad.")
             else:
                 if pct_patrocinados > 30:
@@ -1208,190 +1382,336 @@ if st.session_state.producto_seleccionado_idx is not None:
                     st.success("Bajo nivel de publicidad en tu categoría. Puedes competir orgánicamente.")
         
         st.markdown("---")
+        
+        # ========== SECCIÓN 2: TUS COMPETIDORES MÁS CERCANOS ==========
         st.markdown('<span class="section-heading-num">02</span><div class="section-heading">Competidores Más Cercanos</div>', unsafe_allow_html=True)
         st.caption("¿Contra quién compito en mi subtipo?")
         
+        # Filtrar competidores: mismo subtipo + precio similar (±20%)
         rango_precio_min = producto_seleccionado['precio_real'] * 0.8
         rango_precio_max = producto_seleccionado['precio_real'] * 1.2
+        
         competidores_directos = df_subtipo[
-            (df_subtipo['precio_real'] >= rango_precio_min) &
+            (df_subtipo['precio_real'] >= rango_precio_min) & 
             (df_subtipo['precio_real'] <= rango_precio_max)
         ].copy()
+        
+        # Ordenar por ventas
         competidores_directos = competidores_directos.sort_values('ventas_mes_real', ascending=False).head(10)
         
+        # Crear tabla interactiva
         tabla_competidores = []
         for idx, comp in competidores_directos.iterrows():
             diff_precio = comp['precio_real'] - producto_seleccionado['precio_real']
+            
             tabla_competidores.append({
-                'Marca': comp['brand'], 'Market Tier': comp['market_tier'], 'Estado': comp['condition'],
-                'Precio': f"{comp['precio_real']:.2f} €", 'Diff. Precio': f"{diff_precio:+.2f} €",
-                'Rating': f"{comp['product_rating']:.1f} ⭐", 'Ventas/mes': int(comp['ventas_mes_real']),
+                'Marca': comp['brand'],
+                'Market Tier': comp['market_tier'],
+                'Estado': comp['condition'],
+                'Precio': f"{comp['precio_real']:.2f} €",
+                'Diff. Precio': f"{diff_precio:+.2f} €",
+                'Rating': f"{comp['product_rating']:.1f} ⭐",
+                'Ventas/mes': int(comp['ventas_mes_real']),
                 'Reviews': int(comp['reviews_real']),
-                'Best Seller': '🏆' if comp['is_best_seller'] == 'Yes' else '',
+                'Badge': comp['is_best_seller'] if comp['is_best_seller'] != 'No Badge' else '',
                 'Cupón': '🎟️' if comp['has_coupon'] == 1 else '',
                 'Buy Box': '📦' if comp['buy_box_availability'] == 1 else '',
                 'Premium': '👑' if comp['is_premium_brand'] else '',
             })
-        st.dataframe(pd.DataFrame(tabla_competidores), use_container_width=True, height=400, hide_index=True)
         
+        df_tabla = pd.DataFrame(tabla_competidores)
+        
+        # Mostrar tabla
+        st.dataframe(
+            df_tabla,
+            use_container_width=True,
+            height=400,
+            hide_index=True
+        )
+        
+        # Insights de competidores
         st.markdown("#### Insights Clave")
+        
         insight_comp_cols = st.columns(4)
+        
         with insight_comp_cols[0]:
             num_con_cupon = (competidores_directos['has_coupon'] == 1).sum()
             pct_cupon = (num_con_cupon / len(competidores_directos)) * 100 if len(competidores_directos) > 0 else 0
-            st.metric("Competidores con cupón", f"{num_con_cupon}/{len(competidores_directos)}", delta=f"{pct_cupon:.0f}%")
+            st.metric(
+                "Competidores con cupón",
+                f"{num_con_cupon}/{len(competidores_directos)}",
+                delta=f"{pct_cupon:.0f}%"
+            )
             if pct_cupon > 50 and producto_seleccionado['has_coupon'] == 0:
                 st.warning("Considera activar un cupón")
+        
         with insight_comp_cols[1]:
             precio_promedio_comp = competidores_directos['precio_real'].mean() if len(competidores_directos) > 0 else 0
             diff_vs_comp = producto_seleccionado['precio_real'] - precio_promedio_comp
-            st.metric("Tu precio vs promedio", f"{diff_vs_comp:+.2f} €",
-                delta=f"{(diff_vs_comp/precio_promedio_comp)*100:+.1f}%" if precio_promedio_comp > 0 else None)
+            st.metric(
+                "Tu precio vs promedio",
+                f"{diff_vs_comp:+.2f} €",
+                delta=f"{(diff_vs_comp/precio_promedio_comp)*100:+.1f}%" if precio_promedio_comp > 0 else None
+            )
+        
         with insight_comp_cols[2]:
             rating_promedio_comp = competidores_directos['product_rating'].mean() if len(competidores_directos) > 0 else 0
             diff_rating = producto_seleccionado['product_rating'] - rating_promedio_comp
-            st.metric("Tu rating vs promedio", f"{diff_rating:+.2f}", delta="⭐" if diff_rating > 0 else None)
+            st.metric(
+                "Tu rating vs promedio",
+                f"{diff_rating:+.2f}",
+                delta="⭐" if diff_rating > 0 else None
+            )
             if diff_rating < 0:
                 st.warning("Tu rating está por debajo")
+        
         with insight_comp_cols[3]:
             num_premium = (competidores_directos['is_premium_brand'] == True).sum()
             pct_premium = (num_premium / len(competidores_directos)) * 100 if len(competidores_directos) > 0 else 0
-            st.metric("Marcas Premium", f"{num_premium}/{len(competidores_directos)}", delta=f"{pct_premium:.0f}%")
+            st.metric(
+                "Marcas Premium",
+                f"{num_premium}/{len(competidores_directos)}",
+                delta=f"{pct_premium:.0f}%"
+            )
         
         st.markdown("---")
+        
+        # ========== SECCIÓN 3: ¿QUÉ HACE LA DIFERENCIA? ==========
         st.markdown('<span class="section-heading-num">03</span><div class="section-heading">¿Qué Hace la Diferencia?</div>', unsafe_allow_html=True)
         st.caption("¿Qué características importan en mi subtipo?")
         
+        # Análisis de características
         caracteristicas_analisis = {
-            'Best Seller': ('is_best_seller', 'Yes'),
+            'Best Seller': ('is_best_seller', 'Best Seller'),
             'Cupón': ('has_coupon', 1),
             'Buy Box': ('buy_box_availability', 1),
             'Sostenible': ('sustainability_tags', 1),
             'Marca Premium': ('is_premium_brand', True),
-            'Patrocinado': ('is_sponsored', 'Yes')
+            'Patrocinado': ('is_sponsored', 'Sponsored')
         }
+        
         datos_comparacion = []
+        
         for nombre_car, (columna, valor) in caracteristicas_analisis.items():
+            # Con característica
             con_car = df_subtipo[df_subtipo[columna] == valor]
             sin_car = df_subtipo[df_subtipo[columna] != valor]
+            
             if len(con_car) > 0 and len(sin_car) > 0:
-                tienes = producto_seleccionado[columna] == valor
+                precio_con = con_car['precio_real'].mean()
+                precio_sin = sin_car['precio_real'].mean()
+                ventas_con = con_car['ventas_mes_real'].mean()
+                ventas_sin = sin_car['ventas_mes_real'].mean()
+                
+                # Determinar si el producto tiene esta característica
+                if columna == 'is_best_seller':
+                    tienes = producto_seleccionado[columna] == valor
+                elif columna == 'is_sponsored':
+                    tienes = producto_seleccionado[columna] == valor
+                elif columna == 'is_premium_brand':
+                    tienes = producto_seleccionado[columna] == valor
+                else:
+                    tienes = producto_seleccionado[columna] == valor
+                
                 datos_comparacion.append({
                     'Característica': nombre_car,
-                    'Precio CON': con_car['precio_real'].mean(),
-                    'Precio SIN': sin_car['precio_real'].mean(),
-                    'Ventas CON': con_car['ventas_mes_real'].mean(),
-                    'Ventas SIN': sin_car['ventas_mes_real'].mean(),
-                    'Diff Precio': con_car['precio_real'].mean() - sin_car['precio_real'].mean(),
-                    'Diff Ventas': con_car['ventas_mes_real'].mean() - sin_car['ventas_mes_real'].mean(),
+                    'Precio CON': precio_con,
+                    'Precio SIN': precio_sin,
+                    'Ventas CON': ventas_con,
+                    'Ventas SIN': ventas_sin,
+                    'Diff Precio': precio_con - precio_sin,
+                    'Diff Ventas': ventas_con - ventas_sin,
                     'Tienes': tienes
                 })
         
+        # Gráfica de barras comparativas
         if datos_comparacion:
             fig3 = go.Figure()
-            fig3.add_trace(go.Bar(name='CON característica',
-                x=[d['Característica'] for d in datos_comparacion],
-                y=[d['Precio CON'] for d in datos_comparacion],
+            
+            caracteristicas = [d['Característica'] for d in datos_comparacion]
+            precios_con = [d['Precio CON'] for d in datos_comparacion]
+            precios_sin = [d['Precio SIN'] for d in datos_comparacion]
+            
+            fig3.add_trace(go.Bar(
+                name='CON característica',
+                x=caracteristicas,
+                y=precios_con,
                 marker_color='#4CAF50',
-                text=[f"{p:.2f}€" for p in [d['Precio CON'] for d in datos_comparacion]], textposition='outside'))
-            fig3.add_trace(go.Bar(name='SIN característica',
-                x=[d['Característica'] for d in datos_comparacion],
-                y=[d['Precio SIN'] for d in datos_comparacion],
+                text=[f"{p:.2f}€" for p in precios_con],
+                textposition='outside',
+            ))
+            
+            fig3.add_trace(go.Bar(
+                name='SIN característica',
+                x=caracteristicas,
+                y=precios_sin,
                 marker_color='#FF9800',
-                text=[f"{p:.2f}€" for p in [d['Precio SIN'] for d in datos_comparacion]], textposition='outside'))
-            fig3.update_layout(title='Precio Promedio: CON vs SIN Característica',
-                xaxis_title='Característica', yaxis_title='Precio Promedio (€)',
-                barmode='group', height=400, **PLOTLY_DARK)
+                text=[f"{p:.2f}€" for p in precios_sin],
+                textposition='outside',
+            ))
+            
+            fig3.update_layout(
+                title='Precio Promedio: CON vs SIN Característica',
+                xaxis_title='Característica',
+                yaxis_title='Precio Promedio (€)',
+                barmode='group',
+                height=400,
+                **PLOTLY_DARK
+            )
+            
             st.plotly_chart(fig3, use_container_width=True)
             
+            # Tabla de impacto
             st.markdown("#### Impacto de Características")
+            
             impacto_cols = st.columns(2)
+            
             with impacto_cols[0]:
                 st.markdown("##### Impacto en Precio")
                 for dato in datos_comparacion:
                     diff_pct = (dato['Diff Precio'] / dato['Precio SIN']) * 100 if dato['Precio SIN'] > 0 else 0
                     tiene_marca = "✅" if dato['Tienes'] else "❌"
+                    
                     if dato['Diff Precio'] > 0:
                         st.success(f"{tiene_marca} **{dato['Característica']}**: +{dato['Diff Precio']:.2f}€ ({diff_pct:+.1f}%)")
                     else:
                         st.info(f"{tiene_marca} **{dato['Característica']}**: {dato['Diff Precio']:.2f}€ ({diff_pct:+.1f}%)")
+            
             with impacto_cols[1]:
                 st.markdown("##### Impacto en Ventas")
                 for dato in datos_comparacion:
                     diff_ventas_pct = (dato['Diff Ventas'] / dato['Ventas SIN']) * 100 if dato['Ventas SIN'] > 0 else 0
                     tiene_marca = "✅" if dato['Tienes'] else "❌"
+                    
                     if dato['Diff Ventas'] > 0:
                         st.success(f"{tiene_marca} **{dato['Característica']}**: +{int(dato['Diff Ventas'])} ventas ({diff_ventas_pct:+.1f}%)")
                     else:
                         st.info(f"{tiene_marca} **{dato['Característica']}**: {int(dato['Diff Ventas'])} ventas ({diff_ventas_pct:+.1f}%)")
             
+            # Recomendaciones
             st.markdown("#### Recomendaciones")
             caracteristicas_faltantes = [d for d in datos_comparacion if not d['Tienes'] and d['Diff Precio'] > 0]
+            
             if caracteristicas_faltantes:
+                # Ordenar por impacto en precio
                 caracteristicas_faltantes.sort(key=lambda x: x['Diff Precio'], reverse=True)
-                st.info("**Características que podrías activar:**")
-                for dato in caracteristicas_faltantes[:3]:
+                
+                st.info(f"**Características que podrías activar:**")
+                for dato in caracteristicas_faltantes[:3]:  # Top 3
                     st.markdown(f"- **{dato['Característica']}**: Podría aumentar tu precio en ~{dato['Diff Precio']:.2f}€ y ventas en ~{int(dato['Diff Ventas'])} unidades/mes")
             else:
                 st.success("Tienes todas las características premium activadas.")
         
         st.markdown("---")
+        
+        # ========== SECCIÓN 4: DIAGNÓSTICO DE SALUD ==========
         st.markdown('<span class="section-heading-num">04</span><div class="section-heading">Diagnóstico de Salud</div>', unsafe_allow_html=True)
         st.caption("¿Cómo está mi producto?")
         
-        percentil_precio = (df_subtipo['precio_real'] <= producto_seleccionado['precio_real']).sum() / len(df_subtipo) * 100
-        score_precio = 100 - abs(percentil_precio - 50) * 2
-        score_precio = max(0, min(100, score_precio))
-        max_rating = df_subtipo['product_rating'].max()
-        score_rating = (producto_seleccionado['product_rating'] / max_rating) * 100 if max_rating > 0 else 0
-        percentil_reviews = (df_subtipo['reviews_real'] <= producto_seleccionado['reviews_real']).sum() / len(df_subtipo) * 100
-        bonus_reviews = (percentil_reviews / 100) * 10
-        score_calidad = min(100, score_rating + bonus_reviews)
-        percentil_ventas_salud = (df_subtipo['ventas_mes_real'] <= producto_seleccionado['ventas_mes_real']).sum() / len(df_subtipo) * 100
-        score_popularidad = percentil_ventas_salud
+        # Calcular scores individuales
+        # Score 1: Precio (percentil de precio competitivo)
+        pct_precio = (df_subtipo['precio_real'] <= producto_seleccionado['precio_real']).sum() / len(df_subtipo) * 100
+        if pct_precio <= 50:
+            score_precio = 100 - (50 - pct_precio) * 0.6
+        else:
+            score_precio = 100 - (pct_precio - 50) * 2.0
+        score_precio = float(np.clip(score_precio, 0, 100))
+
+
+        # Score 2: Calidad — rating bayesiano
+        m = 50
+        C = float(df_subtipo['product_rating'].mean())
+        r = float(producto_seleccionado['product_rating'])
+        v = float(producto_seleccionado['reviews_real'])
+        bayes_rating  = (v / (v + m)) * r + (m / (v + m)) * C
+        score_calidad = float(np.clip((bayes_rating - 1) / 4 * 100, 0, 100))
+
+
+        # Score 3: Popularidad — percentil en log(ventas)
+        ventas_log    = np.log1p(df_subtipo['ventas_mes_real'].clip(lower=0))
+        ventas_log_ps = np.log1p(max(0.0, float(producto_seleccionado['ventas_mes_real'])))
+        score_popularidad = float((ventas_log <= ventas_log_ps).mean() * 100)
         
+        # Crear gauges
+
         gauge_cols = st.columns(3)
-        
+
         def crear_gauge(valor, titulo):
+            """Crea un gauge chart"""
             if valor >= 70:
-                color = "#2ea84c"; estado = "BUENA"
+                color = "#2ea84c"
+                estado = "BUENA"
             elif valor >= 40:
-                color = "#d29922"; estado = "MEDIA"
+                color = "#d29922"
+                estado = "MEDIA"
             else:
-                color = "#e5534b"; estado = "BAJA"
+                color = "#e5534b"
+                estado = "BAJA"
+
             fig = go.Figure(go.Indicator(
-                mode="gauge+number", value=valor,
+                mode="gauge+number",
+                value=float(valor),
                 title={'text': titulo, 'font': {'size': 13, 'color': '#8b9099', 'family': 'DM Sans'}},
                 number={'font': {'color': color, 'family': 'DM Mono', 'size': 32}},
                 gauge={
-                    'axis': {'range': [0,100], 'tickcolor':'#4a5260', 'tickfont':{'color':'#4a5260','size':10}},
-                    'bar': {'color': color}, 'bgcolor': '#111418', 'bordercolor': '#21262d',
-                    'steps': [{'range':[0,40],'color':'rgba(229,83,75,0.08)'},
-                               {'range':[40,70],'color':'rgba(210,153,34,0.08)'},
-                               {'range':[70,100],'color':'rgba(46,168,76,0.08)'}],
-                    'threshold': {'line':{'color':color,'width':2},'thickness':0.75,'value':valor}
-                }))
-            fig.update_layout(height=220, margin=dict(l=20,r=20,t=50,b=10),
-                paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#8b9099'))
+                    'axis': {'range': [0, 100], 'tickcolor': '#4a5260', 'tickfont': {'color': '#4a5260', 'size': 10}},
+                    'bar': {'color': color},
+                    'bgcolor': '#111418',
+                    'bordercolor': '#21262d',
+                    'steps': [
+                        {'range': [0, 40],  'color': 'rgba(229,83,75,0.08)'},
+                        {'range': [40, 70], 'color': 'rgba(210,153,34,0.08)'},
+                        {'range': [70, 100],'color': 'rgba(46,168,76,0.08)'}
+                    ],
+                    'threshold': {
+                        'line': {'color': color, 'width': 2},
+                        'thickness': 0.75,
+                        'value': float(valor)
+                    }
+                }
+            ))
+
+            fig.update_layout(
+                height=220,
+                margin=dict(l=20, r=20, t=50, b=10),
+                paper_bgcolor='rgba(0,0,0,0)',
+                plot_bgcolor='rgba(0,0,0,0)',
+                font=dict(color='#8b9099')
+            )
+
             return fig, estado
+
         
         with gauge_cols[0]:
             fig_precio, estado_precio = crear_gauge(score_precio, "PRECIO")
             st.plotly_chart(fig_precio, use_container_width=True)
-            st.markdown(f"<p style='text-align:center;font-weight:bold;'>{estado_precio}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='text-align: center; font-weight: bold;'>{estado_precio}</p>", unsafe_allow_html=True)
+        
         with gauge_cols[1]:
             fig_calidad, estado_calidad = crear_gauge(score_calidad, "CALIDAD")
             st.plotly_chart(fig_calidad, use_container_width=True)
-            st.markdown(f"<p style='text-align:center;font-weight:bold;'>{estado_calidad}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='text-align: center; font-weight: bold;'>{estado_calidad}</p>", unsafe_allow_html=True)
+        
         with gauge_cols[2]:
             fig_popularidad, estado_popularidad = crear_gauge(score_popularidad, "POPULARIDAD")
             st.plotly_chart(fig_popularidad, use_container_width=True)
-            st.markdown(f"<p style='text-align:center;font-weight:bold;'>{estado_popularidad}</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='text-align: center; font-weight: bold;'>{estado_popularidad}</p>", unsafe_allow_html=True)
         
-        score_general = (score_precio + score_calidad + score_popularidad) / 3
+        # Score general
+        score_general = 0.6 * ((score_precio + score_calidad + score_popularidad) / 3) \
+                    + 0.4 * min(score_precio, score_calidad, score_popularidad)
+        score_general = float(np.clip(score_general, 0, 100))
+        
         st.markdown("---")
-        color_gen_hex = "#2ea84c" if score_general >= 70 else "#d29922" if score_general >= 40 else "#e5534b"
-        estado_general = "EXCELENTE" if score_general >= 70 else "BUENA" if score_general >= 40 else "NECESITA ATENCIÓN"
+        
+        # Semáforo general
+        if min(score_precio, score_calidad, score_popularidad) >= 70:
+            color_gen_hex = "#2ea84c"; estado_general = "EXCELENTE"
+        elif score_general >= 55 and min(score_precio, score_calidad, score_popularidad) >= 40:
+            color_gen_hex = "#d29922"; estado_general = "BUENA"
+        else:
+            color_gen_hex = "#e5534b"; estado_general = "NECESITA ATENCIÓN"
+        
         st.markdown(f"""
             <div class="health-panel" style="border-color:{color_gen_hex}33;">
                 <div class="health-label" style="color:{color_gen_hex};">SALUD GENERAL</div>
@@ -1399,28 +1719,43 @@ if st.session_state.producto_seleccionado_idx is not None:
                 <div style="font-family:'DM Mono',monospace;font-size:0.7rem;color:#4a5260;margin-top:0.25rem;">/100 &nbsp;·&nbsp; {estado_general}</div>
             </div>
         """, unsafe_allow_html=True)
+        
         st.markdown("<br>", unsafe_allow_html=True)
         
+        # Resumen de fortalezas y áreas de mejora
         fortaleza_mejora_cols = st.columns(2)
+        
         with fortaleza_mejora_cols[0]:
             st.markdown('<p style="font-size:0.65rem;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:#4a5260;">Fortalezas</p>', unsafe_allow_html=True)
-            if score_precio >= 70: st.success(f"Precio competitivo (Score: {score_precio:.0f})")
-            if score_calidad >= 70: st.success(f"Buena calidad percibida (Score: {score_calidad:.0f})")
-            if score_popularidad >= 70: st.success(f"Ventas sólidas (Score: {score_popularidad:.0f})")
+            
+            if score_precio >= 70:
+                st.success(f"Precio competitivo (Score: {score_precio:.0f})")
+            if score_calidad >= 70:
+                st.success(f"Buena calidad percibida (Score: {score_calidad:.0f})")
+            if score_popularidad >= 70:
+                st.success(f"Ventas sólidas (Score: {score_popularidad:.0f})")
+            
             if score_precio < 70 and score_calidad < 70 and score_popularidad < 70:
                 st.info("Hay oportunidades de mejora en todas las áreas")
+        
         with fortaleza_mejora_cols[1]:
             st.markdown('<p style="font-size:0.65rem;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:#4a5260;">Áreas de Mejora</p>', unsafe_allow_html=True)
+            
             if score_precio < 70:
-                if percentil_precio > 75: st.warning(f"Precio alto vs competencia (Percentil: {percentil_precio:.0f})")
-                else: st.warning(f"Revisa tu estrategia de precio (Score: {score_precio:.0f})")
+                if pct_precio> 75:
+                    st.warning(f"💰 Precio alto vs competencia (Percentil: {pct_precio:.0f})")
+                else:
+                    st.warning(f"Revisa tu estrategia de precio (Score: {score_precio:.0f})")
+            
             if score_calidad < 70:
                 if producto_seleccionado['product_rating'] < df_subtipo['product_rating'].mean():
                     st.warning(f"Rating por debajo del promedio ({producto_seleccionado['product_rating']:.1f} vs {df_subtipo['product_rating'].mean():.1f})")
                 if producto_seleccionado['reviews_real'] < df_subtipo['reviews_real'].mean():
                     st.warning(f"Pocas reviews ({int(producto_seleccionado['reviews_real'])} vs promedio: {int(df_subtipo['reviews_real'].mean())})")
+            
             if score_popularidad < 70:
-                st.warning(f"Ventas por debajo del promedio (Percentil: {percentil_ventas_salud:.0f})")
+                st.warning(f"📊 Ventas por debajo del promedio (Percentil: {score_popularidad:.0f})")
+            
             if score_precio >= 70 and score_calidad >= 70 and score_popularidad >= 70:
                 st.success("Todo en orden. Sigue así.")
     
