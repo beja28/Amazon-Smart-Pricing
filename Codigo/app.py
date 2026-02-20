@@ -1984,7 +1984,6 @@ if st.session_state.producto_seleccionado_idx is not None:
                         tab1, tab2, tab3 = st.tabs(["Productos Similares (Precio)", "Posicionamiento de Mercado", "Estadísticas de Categoría"])
 
                         with tab1:
-
                             # 1. Recuperamos los verdaderos rivales (El bucket de KNN que creamos arriba)
                             if 'df_bucket' in locals() and len(df_bucket) > 0:
                                 df_plot = df_bucket.copy()
@@ -1994,6 +1993,7 @@ if st.session_state.producto_seleccionado_idx is not None:
                             df_plot['short_title'] = df_plot['original_title'].apply(lambda x: str(x)[:55] + '...' if len(str(x)) > 55 else str(x))
                             
                             # 2. ESCALA DE BURBUJAS (Reviews) - Mayor contraste visual usando raíz cuadrada
+                            max_rev = df_plot['reviews_real'].max() if len(df_plot) > 0 and df_plot['reviews_real'].max() > 0 else 1
                             df_plot['bubble_size'] = 8 + np.sqrt(df_plot['reviews_real'] / max_rev) * 45
 
                             fig = go.Figure()
@@ -2077,16 +2077,17 @@ if st.session_state.producto_seleccionado_idx is not None:
                                 fig.add_vline(x=median_price, line_dash="dot", line_color="#4a5260", opacity=0.5, 
                                               annotation_text="Precio Medio", annotation_font_color="#8b9099", annotation_position="top left")
 
-
-                            df_context = df.copy()
-                            df_context['diff_precio'] = (df_context['precio_real'] - precio_predicho).abs()
-                            df_zoom = df_context.nsmallest(50, 'diff_precio')
-                            fig = px.scatter(df_zoom, x="precio_real", y="ventas_mes_real", size="reviews_real", color="category", opacity=0.6,
-                                hover_data={"brand":True,"subtype":True,"category":True,"precio_real":":.2f €","ventas_mes_real":":.0f","product_rating":":.1f"},
-                                title=f"50 productos con precio más cercano a {precio_predicho:.2f}€",
-                                labels={"precio_real":"Precio (€)","ventas_mes_real":"Ventas último mes"}, height=600)
-                            fig.add_scatter(x=[precio_predicho], y=[producto_seleccionado['ventas_mes_real']],
-                                mode='markers+text', marker=dict(size=35, color='red', symbol='star', line=dict(width=3, color='white')),
+                            # --- LAYOUT Y DISEÑO PREMIUM ---
+                            fig.update_layout(**PLOTLY_DARK)
+                            fig.update_layout(
+                                title=dict(
+                                    text=f"Mapa de Batalla: {len(df_plot)} Rivales encontrados por IA (KNN)",
+                                    font=dict(color='#e8e6e1', size=16, family='Cormorant Garamond')
+                                ),
+                                xaxis_title="Precio (€)",
+                                yaxis_title="Ventas último mes",
+                                height=550,
+                                showlegend=True,
                                 legend=dict(
                                     orientation="h", 
                                     yanchor="bottom", y=1.02, 
@@ -2120,7 +2121,6 @@ if st.session_state.producto_seleccionado_idx is not None:
                                 comparison_df['Rating']     = comparison_df['Rating'].apply(lambda x: f"{x:.1f}")
                                 comparison_df['Reviews']    = comparison_df['Reviews'].apply(lambda x: f"{int(x)}")
                                 st.dataframe(comparison_df, use_container_width=True, height=350, hide_index=True)
-
                         with tab2:
                             df_categoria = df[df['category'] == producto_seleccionado['category']]
                             fig2 = px.scatter(df_categoria, x="precio_real", y="product_rating", size="ventas_mes_real", color="market_tier", opacity=0.5,
