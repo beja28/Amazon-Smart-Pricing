@@ -8,6 +8,8 @@ from catboost import CatBoostRegressor
 import lightgbm as lgb
 import pickle
 import os
+import json
+from corrector_precio import CorrectorPorSimilitud 
 
 # ---------------------------------------------------------------------------
 # CONFIGURACIÓN DE RUTAS Y PESOS
@@ -37,13 +39,25 @@ CATEGORY_WEIGHTS = {
 # DICCIONARIO PARA ALMACENAR LOS MODELOS EN MEMORIA
 # ---------------------------------------------------------------------------
 models: Dict[str, Any] = {}
+corrector_api = None 
 
 # ---------------------------------------------------------------------------
 # GESTIÓN DEL CICLO DE VIDA (Lifespan)
 # ---------------------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global corrector_api
     print("🚀 Iniciando API y cargando modelos en memoria...")
+    
+    # Cargar el archivo de anclas estadísticas 
+    ruta_stats = "estadisticas_precio.json" # Ajusta si está en otra carpeta
+    if os.path.exists(ruta_stats):
+        with open(ruta_stats, 'r') as f:
+            diccionario_estadisticas = json.load(f)
+        corrector_api = CorrectorPorSimilitud('motor_similitud_titulos.pkl')
+        print(f"✅ Cerebro Estadístico cargado con {len(diccionario_estadisticas)} anclas.")
+    else:
+        print(f"⚠️ ADVERTENCIA: No se encontró '{ruta_stats}'. El post-procesamiento fallará.")
     
     # 1. Cargar el Modelo General (LightGBM - .pkl)
     general_model_path = os.path.join(MODELS_DIR, GENERAL_MODEL_FILENAME)
@@ -211,6 +225,8 @@ class ProductInput(BaseModel):
     pd_wattage:           Optional[Any] = None
     case_keyboard:        Optional[Any] = None
 
+    original_title:       Optional[str] = ""
+    
     # --- Features de comportamiento (tipos fijos) ---
     product_rating:           float
     is_best_seller:           str
@@ -343,6 +359,7 @@ def get_features(category: Optional[str] = None):
         "feature_names": features
     }
 
+
 @app.post("/predict")
 def predict_price(product: ProductInput):
     if "general" not in models:
@@ -374,15 +391,31 @@ def predict_price(product: ProductInput):
             log_pred_especifico = float(models[categoria_producto].predict(df_especifico)[0])
             modelo_usado = f"Blending_General(LGBM)+Especifico_{categoria_producto}(CatBoost)"
 
-        # 4. ENSAMBLADO MATEMÁTICO (Logarítmico)
-        log_pred_final = (log_pred_general * peso_general) + (log_pred_especifico * peso_especifico)
+        # 4. ENSAMBLADO MATEMÁTICO (Modelos puros)
+        log_pred_modelos = (log_pred_general * peso_general) + (log_pred_especifico * peso_especifico)
+        precio_modelos_eur = float(np.expm1(log_pred_modelos))
 
-        # 5. TRANSFORMACIÓN FINAL A EUROS (con expm1)
-        precio_real = float(np.expm1(log_pred_final))
+        # 5. POST-PROCESAMIENTO: Corrector por Similitud Textual
+        log_final_corregido = log_pred_modelos
+        motivo_correccion = "Corrector no inicializado"
+        
+        if corrector_api is not None:
+            try:
+                # El corrector buscará el 'original_title' dentro de 'row'
+                log_final_corregido, motivo_correccion = corrector_api.corregir_prediccion(log_pred_modelos, row)
+            except Exception as e:
+                print(f"⚠️ Error en corrector: {e}")
+                motivo_correccion = "Error en corrección (Se usa modelo puro)"
 
+        # 6. TRANSFORMACIÓN FINAL A EUROS (Ya con el precio corregido)
+        precio_final_eur = float(np.expm1(log_final_corregido))
+        diferencia_log = log_final_corregido - log_pred_modelos
+
+        # 7. RESPUESTA JSON ENRIQUECIDA
         return {
-            "predicted_price": round(precio_real, 2),
-            "predicted_log_price": round(log_pred_final, 4),
+            "predicted_price": round(precio_final_eur, 2),
+            "predicted_log_price": round(log_final_corregido, 4),
+            
             "prediction_details": {
                 "strategy": modelo_usado,
                 "general_log_pred": round(log_pred_general, 4),
@@ -392,6 +425,14 @@ def predict_price(product: ProductInput):
                     "specific": peso_especifico
                 }
             },
+            
+            "correction_details": {
+                "status": motivo_correccion,
+                "original_model_price_eur": round(precio_modelos_eur, 2),
+                "original_model_log_price": round(log_pred_modelos, 4),
+                "log_difference": round(diferencia_log, 4)
+            },
+            
             "status": "success"
         }
 

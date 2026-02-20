@@ -1438,8 +1438,11 @@ if st.session_state.producto_seleccionado_idx is not None:
             st.markdown("## Análisis de Precio Óptimo")
 
             COLS_EXCLUIR = {
-                'original_title', 'product_image_url', 'log_original_price',
-                'precio_real', 'ventas_mes_real', 'reviews_real',
+                'product_image_url', # URL, no es feature del modelo
+                'log_original_price',# TARGET — nunca enviarlo
+                'precio_real',       # columna derivada del dashboard
+                'ventas_mes_real',   # columna derivada del dashboard
+                'reviews_real',      # columna derivada del dashboard
             }
 
             payload = {}
@@ -1454,7 +1457,8 @@ if st.session_state.producto_seleccionado_idx is not None:
 
             with st.spinner("Analizando mercado y competencia..."):
                 try:
-                    response = requests.post(API_URL, json=payload)
+                    response = requests.post(API_URL, json=payload, timeout=15)
+
                     if response.status_code == 200:
                         data_api = response.json()
                         precio_predicho = data_api['predicted_price']
