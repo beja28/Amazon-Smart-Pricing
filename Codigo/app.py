@@ -3,6 +3,8 @@ import streamlit.components.v1 as components  # ← AÑADIDO (1/2)
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.neighbors import NearestNeighbors
 import requests
 import numpy as np
 import os
@@ -573,6 +575,20 @@ def load_test_samples():
     except Exception as e:
         st.error(f"Error cargando muestras de test: {e}")
         return None
+
+@st.cache_resource
+def get_knn_engine(df_market):
+    """Construye el motor KNN en memoria para buscar competidores idénticos."""
+    df_valid = df_market.dropna(subset=['original_title']).reset_index(drop=True)
+    vectorizer = TfidfVectorizer(stop_words='english', max_features=10000)
+    X_tfidf = vectorizer.fit_transform(df_valid['original_title'])
+    
+    # Buscamos hasta 50 vecinos para tener margen al filtrar por precio
+    n_vecinos = min(50, len(df_valid))
+    knn = NearestNeighbors(n_neighbors=n_vecinos, metric='cosine', n_jobs=1)
+    knn.fit(X_tfidf)
+    
+    return vectorizer, knn, df_valid
 
 def get_sample_products(n_products=5):
     """Selecciona 5 productos aleatorios de 5 categorías distintas del CSV de test"""
@@ -1813,15 +1829,154 @@ if st.session_state.producto_seleccionado_idx is not None:
                             signo = "+" if diferencia > 0 else ""
                             st.markdown(f'<div class="result-box" style="border-color:{diff_color}33;"><div class="result-box-label">Diferencia</div><div class="result-box-value" style="color:{diff_color};font-size:1.8rem;">{signo}{diferencia:.2f} €</div><div style="font-family:\'DM Mono\',monospace;font-size:0.75rem;color:{diff_color};margin-top:0.25rem;">{porcentaje_cambio:+.1f}%</div></div>', unsafe_allow_html=True)
 
+                        # --- MOTOR DE CRECIMIENTO (GROWTH OPTIMIZATION) ---
                         st.markdown("<br>", unsafe_allow_html=True)
-                        if diferencia > 0:
-                            st.success(f"**Recomendación:** Hay margen para subir el precio. Podrías aumentarlo en {diferencia:.2f}€ según las condiciones del mercado.")
-                            st.info(f"**Ingresos adicionales proyectados:** +{diferencia * producto_seleccionado['ventas_mes_real']:.2f} €/mes (asumiendo ventas constantes)")
-                        elif diferencia < 0:
-                            st.error(f"**Recomendación:** Tu precio está por encima del mercado. Considera bajarlo en {abs(diferencia):.2f}€ para ser más competitivo.")
-                            st.warning("Un precio más bajo podría incrementar tus ventas y visibilidad.")
+                        st.markdown('<div class="section-label">Motor de Crecimiento (Revenue Optimization)</div>', unsafe_allow_html=True)
+
+                        # 1. Crear el "Competitive Bucket" usando KNN (Similitud Textual)
+                        vectorizer, knn_model, df_knn = get_knn_engine(df)
+                        titulo_actual = str(producto_seleccionado['original_title'])
+                        
+                        vec_entrada = vectorizer.transform([titulo_actual])
+                        distancias, indices = knn_model.kneighbors(vec_entrada)
+                        
+                        # RED MÁS AMPLIA: +/- 40% del precio sugerido para captar más mercado
+                        rango_min = precio_predicho * 0.60
+                        rango_max = precio_predicho * 1.40
+                        
+                        indices_validos = []
+                        for d, idx in zip(distancias[0], indices[0]):
+                            # RED MÁS AMPLIA: Distancia < 0.70
+                            if d < 0.70:
+                                row_vecino = df_knn.iloc[idx]
+                                if rango_min <= row_vecino['precio_real'] <= rango_max:
+                                    indices_validos.append(idx)
+                                    
+                        df_bucket = df_knn.iloc[indices_validos]
+
+                        # Fallback de seguridad: Si hay menos de 4 competidores exactos, 
+                        # cogemos todo el subtipo en ese rango de precios.
+                        if len(df_bucket) < 4:
+                            df_bucket = df[(df['subtype'] == producto_seleccionado['subtype']) & 
+                                           (df['precio_real'] >= rango_min) & 
+                                           (df['precio_real'] <= rango_max)]
+
+                        # 2. Definir Palancas de Acción (Levers)
+                        levers = [
+                            {'id': 'has_coupon', 'target': 1, 'current': producto_seleccionado['has_coupon'], 'name': 'Activar Cupón Promocional', 'icon': '🎟️', 'diff': 'Baja'},
+                            {'id': 'is_sponsored', 'target': 'Yes', 'current': producto_seleccionado['is_sponsored'], 'name': 'Activar Campaña Sponsored', 'icon': '📢', 'diff': 'Baja'},
+                            {'id': 'sustainability_tags', 'target': 1, 'current': producto_seleccionado['sustainability_tags'], 'name': 'Certificación Eco / Sostenible', 'icon': '🌱', 'diff': 'Media'},
+                            {'id': 'buy_box_availability', 'target': 1, 'current': producto_seleccionado['buy_box_availability'], 'name': 'Asegurar Buy Box (Stock/Prime)', 'icon': '📦', 'diff': 'Alta'}
+                        ]
+
+                        recomendaciones = []
+                        ventas_actuales = producto_seleccionado['ventas_mes_real']
+                        
+                        # Obtenemos datos macro (todo el subtipo) por si el bucket local falla
+                        df_subtipo_entero = df[df['subtype'] == producto_seleccionado['subtype']]
+
+                        # 3. Calcular el Incremento de Ventas (Lift Analysis Inteligente)
+                        for lever in levers:
+                            # Solo analizamos las cosas que el producto AÚN NO TIENE
+                            if lever['current'] != lever['target']: 
+                                col = lever['id']
+                                val_target = lever['target']
+                                
+                                competidores_con = df_bucket[df_bucket[col] == val_target]['ventas_mes_real']
+                                competidores_sin = df_bucket[df_bucket[col] != val_target]['ventas_mes_real']
+                                
+                                penetracion = (len(competidores_con) / len(df_bucket)) * 100 if len(df_bucket) > 0 else 0
+                                
+                                lift_pct = 0.0
+                                motivo_estrategico = ""
+                                
+                                # ESTRATEGIA A: Lift puro en competidores directos
+                                if len(competidores_con) >= 1 and len(competidores_sin) >= 1:
+                                    m_con = competidores_con.median()
+                                    m_sin = competidores_sin.median()
+                                    if m_con > m_sin and m_sin > 0:
+                                        lift_pct = (m_con - m_sin) / m_sin
+                                        motivo_estrategico = f"El <b style='color:#c9933a; font-size:1.1em;'>{penetracion:.0f}%</b> de tus rivales directos lo usan y venden más."
+                                
+                                # ESTRATEGIA B: Fallback a la Macro-Categoría
+                                if lift_pct == 0.0 and penetracion > 15:
+                                    macro_con = df_subtipo_entero[df_subtipo_entero[col] == val_target]['ventas_mes_real']
+                                    macro_sin = df_subtipo_entero[df_subtipo_entero[col] != val_target]['ventas_mes_real']
+                                    if len(macro_con) > 3 and len(macro_sin) > 3:
+                                        m_macro_con = macro_con.median()
+                                        m_macro_sin = macro_sin.median()
+                                        if m_macro_con > m_macro_sin and m_macro_sin > 0:
+                                            lift_pct = min((m_macro_con - m_macro_sin) / m_macro_sin, 0.50)
+                                            motivo_estrategico = f"Tendencia en tu categoría: venderás un <b style='color:#2ea84c; font-size:1.1em;'>+{lift_pct*100:.0f}%</b> más de media."
+
+                                # ESTRATEGIA C: Recomendación Defensiva (Estándar de mercado)
+                                if lift_pct == 0.0 and penetracion >= 45:
+                                    lift_pct = 0.08 
+                                    motivo_estrategico = f"Estándar de mercado: el <b style='color:#c9933a; font-size:1.1em;'>{penetracion:.0f}%</b> ya lo tiene. Estás perdiendo visibilidad."
+
+                                # Si hemos logrado obtener un impacto positivo, lo guardamos
+                                if lift_pct > 0:
+                                    # Limitamos el optimismo extremo (nadie vende un +500% solo por un tag eco)
+                                    lift_pct = min(lift_pct, 0.60) 
+                                    
+                                    ventas_extra = ventas_actuales * lift_pct
+                                    ingreso_extra_mensual = ventas_extra * precio_predicho
+                                    
+                                    recomendaciones.append({
+                                        'Accion': f"{lever['icon']} {lever['name']}",
+                                        'Dificultad': lever['diff'],
+                                        'Lift_PCT': lift_pct * 100,
+                                        'Ingreso_Extra': ingreso_extra_mensual,
+                                        'Motivo': motivo_estrategico
+                                    })
+
+                        # 4. Mostrar el Plan de Acción Visual
+                        if recomendaciones:
+                            recomendaciones.sort(key=lambda x: x['Ingreso_Extra'], reverse=True)
+                            
+                            ingreso_base = ventas_actuales * precio_predicho
+                            mejor_accion = recomendaciones[0]
+                            nuevo_ingreso = ingreso_base + mejor_accion['Ingreso_Extra']
+                            
+                            st.info(
+                                f"💡 **Simulador de Revenue:** Ajustando el precio a **{precio_predicho:.2f}€** "
+                                f"y aplicando la acción principal recomendada, podrías pasar de facturar "
+                                f"**{ingreso_base:,.0f}€** a **{nuevo_ingreso:,.0f}€** mensuales."
+                            )
+                            
+                            st.markdown(f"<p style='font-size:0.75rem; color:#8b9099;'>Análisis impulsado por KNN basado en competidores similares.</p>", unsafe_allow_html=True)
+                            
+                            for rec in recomendaciones:
+                                # Colores exactos para la dificultad
+                                diff_color = "#3fb950" if rec['Dificultad'] == "Baja" else "#d29922" if rec['Dificultad'] == "Media" else "#e5534b"
+                                
+                                st.markdown(f"""
+                                <div style="background:#161b22; border:1px solid #21262d; border-radius:8px; padding:1.2rem; margin-bottom:0.8rem; display:flex; justify-content:space-between; align-items:center;">
+                                    <div style="flex:2;">
+                                        <div style="font-weight:600; font-size:1.15rem; color:#e8e6e1; letter-spacing:0.02em;">
+                                            {rec['Accion']}
+                                        </div>
+                                        <div style="font-size:0.9rem; color:#b3b8c2; margin-top:0.35rem; line-height:1.4;">
+                                            {rec['Motivo']}
+                                        </div>
+                                    </div>
+                                    <div style="flex:1; text-align:center;">
+                                        <span style="font-size:0.75rem; color:{diff_color}; border:1px solid {diff_color}55; background:{diff_color}11; padding:0.3rem 0.8rem; border-radius:15px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">
+                                            Dificultad {rec['Dificultad']}
+                                        </span>
+                                    </div>
+                                    <div style="flex:1.5; text-align:right;">
+                                        <div style="color:#2ea84c; font-family:'DM Mono', monospace; font-size:1.4rem; font-weight:500;">
+                                            +{rec['Lift_PCT']:.0f}% ventas
+                                        </div>
+                                        <div style="color:#c9933a; font-family:'DM Mono', monospace; font-size:0.95rem; margin-top:0.15rem;">
+                                            + {rec['Ingreso_Extra']:,.0f} € / mes
+                                        </div>
+                                    </div>
+                                </div>
+                                """, unsafe_allow_html=True)
                         else:
-                            st.success("**¡Perfecto!** Tu precio actual está alineado con el mercado.")
+                            st.success("🏆 **¡Posición de ventaja!** Tu producto ya cuenta con las palancas clave para tu segmento. Céntrate en mantener el precio sugerido y conseguir más reviews orgánicas.")
 
                         st.markdown("---")
                         st.markdown('<div class="section-label">Análisis de Competencia</div>', unsafe_allow_html=True)
@@ -1829,6 +1984,100 @@ if st.session_state.producto_seleccionado_idx is not None:
                         tab1, tab2, tab3 = st.tabs(["Productos Similares (Precio)", "Posicionamiento de Mercado", "Estadísticas de Categoría"])
 
                         with tab1:
+
+                            # 1. Recuperamos los verdaderos rivales (El bucket de KNN que creamos arriba)
+                            if 'df_bucket' in locals() and len(df_bucket) > 0:
+                                df_plot = df_bucket.copy()
+                            else:
+                                df_plot = df[(df['subtype'] == producto_seleccionado['subtype'])]
+                            
+                            df_plot['short_title'] = df_plot['original_title'].apply(lambda x: str(x)[:55] + '...' if len(str(x)) > 55 else str(x))
+                            
+                            # 2. ESCALA DE BURBUJAS (Reviews) - Mayor contraste visual usando raíz cuadrada
+                            df_plot['bubble_size'] = 8 + np.sqrt(df_plot['reviews_real'] / max_rev) * 45
+
+                            fig = go.Figure()
+
+                            # --- TRAZA 1: COMPETIDORES DIRECTOS (Burbujas dinámicas) ---
+                            fig.add_trace(go.Scatter(
+                                x=df_plot['precio_real'],
+                                y=df_plot['ventas_mes_real'],
+                                mode='markers',
+                                marker=dict(
+                                    size=df_plot['bubble_size'],
+                                    color='#388bfd', 
+                                    opacity=0.5,
+                                    line=dict(width=1, color='#8b9099')
+                                ),
+                                customdata=np.stack((df_plot['brand'], df_plot['short_title'], df_plot['product_rating'], df_plot['reviews_real']), axis=-1),
+                                hovertemplate=(
+                                    "<b style='color:#388bfd; font-size:1.1em;'>%{customdata[0]}</b><br>"
+                                    "<span style='color:#b3b8c2;'>%{customdata[1]}</span><br><br>"
+                                    "<b>Precio:</b> %{x:.2f} €<br>"
+                                    "<b>Ventas/mes:</b> %{y:.0f}<br>"
+                                    "<b>Rating:</b> %{customdata[2]:.1f} ⭐<br>"
+                                    "<b>Reviews:</b> %{customdata[3]} <i>(Tamaño burbuja)</i><br>"
+                                    "<extra></extra>"
+                                ),
+                                name="Rivales Directos (KNN)"
+                            ))
+
+                            # --- TRAZA 2: MOVIMIENTO ESTRATÉGICO (Flecha ultra fina) ---
+                            fig.add_annotation(
+                                x=precio_predicho, 
+                                y=producto_seleccionado['ventas_mes_real'],
+                                ax=producto_seleccionado['precio_real'],
+                                ay=producto_seleccionado['ventas_mes_real'],
+                                xref="x", yref="y", axref="x", ayref="y",
+                                text="", showarrow=True, arrowhead=2, 
+                                arrowsize=1.2, arrowwidth=1, # <--- FLECHA FINA Y SUTIL
+                                arrowcolor="#c9933a", opacity=0.6
+                            )
+
+                            # --- TRAZA 3: TU PRECIO ACTUAL (Punto de origen) ---
+                            fig.add_trace(go.Scatter(
+                                x=[producto_seleccionado['precio_real']],
+                                y=[producto_seleccionado['ventas_mes_real']],
+                                mode='markers',
+                                marker=dict(size=10, color='#e5534b', opacity=0.4), 
+                                hoverinfo='skip',
+                                name="Posición Actual"
+                            ))
+
+                            # --- TRAZA 4: TU NUEVO PRECIO ÓPTIMO (Diamante Profesional) ---
+                            fig.add_trace(go.Scatter(
+                                x=[precio_predicho],
+                                y=[producto_seleccionado['ventas_mes_real']],
+                                mode='markers+text',
+                                marker=dict(
+                                    size=16, 
+                                    color='#c9933a', 
+                                    symbol='diamond', # <--- LOOK CORPORATIVO
+                                    line=dict(width=2, color='#e8e6e1')
+                                ),
+                                text=['TARGET IA'],
+                                textposition='top center',
+                                textfont=dict(size=11, color='#c9933a', family='DM Mono', weight='bold'),
+                                hovertemplate=(
+                                    "<b style='color:#c9933a'>TU NUEVO POSICIONAMIENTO</b><br>"
+                                    "<b>Precio Óptimo:</b> %{x:.2f} €<br>"
+                                    "<b>Ventas Actuales:</b> %{y:.0f}<br>"
+                                    "<extra></extra>"
+                                ),
+                                name='Objetivo IA'
+                            ))
+
+                            # --- LÍNEAS DE CUADRANTES ---
+                            if len(df_plot) > 0:
+                                median_price = df_plot['precio_real'].median()
+                                median_sales = df_plot['ventas_mes_real'].median()
+                                
+                                fig.add_hline(y=median_sales, line_dash="dot", line_color="#4a5260", opacity=0.5, 
+                                              annotation_text="Ventas Medias", annotation_font_color="#8b9099", annotation_position="bottom right")
+                                fig.add_vline(x=median_price, line_dash="dot", line_color="#4a5260", opacity=0.5, 
+                                              annotation_text="Precio Medio", annotation_font_color="#8b9099", annotation_position="top left")
+
+
                             df_context = df.copy()
                             df_context['diff_precio'] = (df_context['precio_real'] - precio_predicho).abs()
                             df_zoom = df_context.nsmallest(50, 'diff_precio')
@@ -1838,19 +2087,39 @@ if st.session_state.producto_seleccionado_idx is not None:
                                 labels={"precio_real":"Precio (€)","ventas_mes_real":"Ventas último mes"}, height=600)
                             fig.add_scatter(x=[precio_predicho], y=[producto_seleccionado['ventas_mes_real']],
                                 mode='markers+text', marker=dict(size=35, color='red', symbol='star', line=dict(width=3, color='white')),
-                                text=['TU PRODUCTO'], textposition='top center', textfont=dict(size=16, color='red', family='Arial Black'),
-                                name='TU PRODUCTO', showlegend=True)
-                            fig.update_layout(**PLOTLY_DARK)
+                                legend=dict(
+                                    orientation="h", 
+                                    yanchor="bottom", y=1.02, 
+                                    xanchor="right", x=1, 
+                                    bgcolor='rgba(17,20,24,0.8)'
+                                ),
+                                hoverlabel=dict(bgcolor="#161b22", bordercolor="#21262d", font_size=13, font_family="DM Sans")
+                            )
+                            
+                            # Añadimos una nota al pie en la propia gráfica para que quede claro lo del tamaño
+                            fig.add_annotation(
+                                text="* El tamaño de la burbuja representa el volumen de Reviews",
+                                xref="paper", yref="paper", x=0, y=-0.12, showarrow=False,
+                                font=dict(color="#4a5260", size=11, family="DM Sans")
+                            )
+                            
                             st.plotly_chart(fig, use_container_width=True)
-                            with st.expander("Ver detalles de productos similares"):
-                                comparison_df = df_zoom[['brand','subtype','category','precio_real','ventas_mes_real','product_rating','reviews_real']].copy()
-                                comparison_df.columns = ['Marca','Subtipo','Categoría','Precio (€)','Ventas/mes','Rating','Reviews']
-                                comparison_df = comparison_df.sort_values('Precio (€)')
+
+                            # --- TABLA DE DETALLES ---
+                            with st.expander("Ver tabla completa de rivales directos (KNN)"):
+                                comparison_df = df_plot[[
+                                    'brand', 'original_title', 'precio_real', 'ventas_mes_real',
+                                    'product_rating', 'reviews_real'
+                                ]].copy()
+                                comparison_df.columns = [
+                                    'Marca', 'Producto', 'Precio (€)', 'Ventas/mes', 'Rating', 'Reviews'
+                                ]
+                                comparison_df = comparison_df.sort_values('Ventas/mes', ascending=False)
                                 comparison_df['Precio (€)'] = comparison_df['Precio (€)'].apply(lambda x: f"{x:.2f}")
                                 comparison_df['Ventas/mes'] = comparison_df['Ventas/mes'].apply(lambda x: f"{int(x)}")
-                                comparison_df['Rating'] = comparison_df['Rating'].apply(lambda x: f"{x:.1f}")
-                                comparison_df['Reviews'] = comparison_df['Reviews'].apply(lambda x: f"{int(x)}")
-                                st.dataframe(comparison_df, use_container_width=True, height=400)
+                                comparison_df['Rating']     = comparison_df['Rating'].apply(lambda x: f"{x:.1f}")
+                                comparison_df['Reviews']    = comparison_df['Reviews'].apply(lambda x: f"{int(x)}")
+                                st.dataframe(comparison_df, use_container_width=True, height=350, hide_index=True)
 
                         with tab2:
                             df_categoria = df[df['category'] == producto_seleccionado['category']]
