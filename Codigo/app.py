@@ -1119,7 +1119,7 @@ if st.session_state.producto_seleccionado_idx is not None:
         df_subtipo = df[df['subtype'] == producto_seleccionado['subtype']]
         
                 # ========== SECCIÓN 1: TU POSICIÓN EN EL MERCADO ==========
-        st.markdown("### 1️⃣ Tu Posición en el Mercado")
+        st.markdown('<span class="section-heading-num">01</span><div class="section-heading">Tu Posición en el Mercado</div>', unsafe_allow_html=True)
         st.caption("¿Dónde estoy yo en mi subtipo?")
 
         # Cuartiles P25 y P75
@@ -1419,62 +1419,102 @@ if st.session_state.producto_seleccionado_idx is not None:
         
         # ========== SECCIÓN 2: TUS COMPETIDORES MÁS CERCANOS ==========
         st.markdown('<span class="section-heading-num">02</span><div class="section-heading">Competidores Más Cercanos</div>', unsafe_allow_html=True)
-        st.caption("¿Contra quién compito en mi subtipo?")
         
-        # Filtrar competidores: mismo subtipo + precio similar (±20%)
-        rango_precio_min = producto_seleccionado['precio_real'] * 0.8
-        rango_precio_max = producto_seleccionado['precio_real'] * 1.2
+        # --- NUEVA LÓGICA DE COMPETIDORES: KNN (IA) ---
+        vectorizer, knn_model, df_knn = get_knn_engine(df)
+        titulo_actual = str(producto_seleccionado['original_title'])
         
-        competidores_directos = df_subtipo[
-            (df_subtipo['precio_real'] >= rango_precio_min) & 
-            (df_subtipo['precio_real'] <= rango_precio_max)
-        ].copy()
+        vec_entrada = vectorizer.transform([titulo_actual])
+        distancias, indices = knn_model.kneighbors(vec_entrada)
         
-        # Ordenar por ventas
-        competidores_directos = competidores_directos.sort_values('ventas_mes_real', ascending=False).head(10)
+        # Rango de precio: +/- 40% del precio ACTUAL
+        rango_min = producto_seleccionado['precio_real'] * 0.60
+        rango_max = producto_seleccionado['precio_real'] * 1.40
         
-        # Crear tabla interactiva
-        tabla_competidores = []
-        for idx, comp in competidores_directos.iterrows():
-            diff_precio = comp['precio_real'] - producto_seleccionado['precio_real']
+        indices_validos = []
+        for d, idx in zip(distancias[0], indices[0]):
+            if d < 0.70: # Filtro de similitud textual
+                row_vecino = df_knn.iloc[idx]
+                if rango_min <= row_vecino['precio_real'] <= rango_max:
+                    indices_validos.append(idx)
+                    
+        competidores_directos = df_knn.iloc[indices_validos].copy()
+
+        # Fallback de seguridad: Si hay menos de 4 competidores exactos, 
+        # ampliamos la búsqueda al subtipo clásico en ese rango de precios.
+        if len(competidores_directos) < 4:
+            competidores_directos = df[(df['subtype'] == producto_seleccionado['subtype']) & 
+                                       (df['precio_real'] >= rango_min) & 
+                                       (df['precio_real'] <= rango_max)].copy()
+        
+        # Ordenar por ventas para mostrar los líderes primero en la tabla
+        # (He quitado el .head(10) porque como tu tabla ya tiene scroll infinito,
+        # es mejor mostrar todos los rivales que detecte la IA)
+        competidores_directos = competidores_directos.sort_values('ventas_mes_real', ascending=False)
+        
+        # Crear filas HTML dinámicamente con la nueva estructura
+        rows_html = ""
+        for _, comp in competidores_directos.iterrows():
+            diff_precio = comp.get('precio_real', 0) - producto_seleccionado['precio_real']
+            color_diff = "#e5534b" if diff_precio < 0 else ("#2ea84c" if diff_precio > 0 else "#8b9099")
             
-            tabla_competidores.append({
-                'Marca': comp['brand'],
-                'Market Tier': comp['market_tier'],
-                'Estado': comp['condition'],
-                'Precio': f"{comp['precio_real']:.2f} €",
-                'Diff. Precio': f"{diff_precio:+.2f} €",
-                'Rating': f"{comp['product_rating']:.1f} ⭐",
-                'Ventas/mes': int(comp['ventas_mes_real']),
-                'Reviews': int(comp['reviews_real']),
-                'Badge': comp['is_best_seller'] if comp['is_best_seller'] != 'No Badge' else '',
-                'Cupón': '🎟️' if comp['has_coupon'] == 1 else '',
-                'Buy Box': '📦' if comp['buy_box_availability'] == 1 else '',
-                'Premium': '👑' if comp['is_premium_brand'] else '',
-            })
+            img_url = comp.get('product_image_url', '')
+            img_tag = f'<img src="{img_url}" style="width:40px;height:40px;object-fit:contain;border-radius:4px;background:#fff;padding:2px;">' if pd.notna(img_url) and img_url else 'N/A'
+            
+            titulo = str(comp.get('original_title', ''))
+            titulo_corto = titulo[:55] + '...' if len(titulo) > 55 else titulo
+            
+            marca = str(comp.get('brand', ''))
+            precio_str = f"{comp.get('precio_real', 0):.2f} €"
+            diff_str = f'<span style="color:{color_diff}; font-weight:600;">{diff_precio:+.2f} €</span>'
+            ventas_str = f"{int(comp.get('ventas_mes_real', 0))} uds"
+            rating_str = f"{comp.get('product_rating', 0):.1f} ⭐"
+            reviews_str = f"{int(comp.get('reviews_real', 0))}"
+            
+            badge_str = '🏆' if comp.get('is_best_seller') == 'Yes' else ''
+            cupon_str = '🎟️' if comp.get('has_coupon') == 1 else ''
+            buybox_str = '📦' if comp.get('buy_box_availability') == 1 else ''
+            premium_str = '👑' if comp.get('is_premium_brand') else ''
+            
+            link_url = str(comp.get('product_url', ''))
+            if link_url and link_url.lower() != 'nan':
+                link_url = link_url.split(',202')[0]
+                if link_url.startswith('/'):
+                    link_url = f"https://www.amazon.es{link_url}"
+                link_tag = f'<a href="{link_url}" target="_blank" style="color:#c9933a;text-decoration:none;font-weight:600;font-size:0.75rem;">Ver ↗️</a>'
+            else:
+                link_tag = ''
+            
+            cells = (
+                f'<td style="padding:8px 12px;border-bottom:1px solid #21262d1a;vertical-align:middle;text-align:center;">{img_tag}</td>'
+                f'<td style="padding:8px 12px;font-size:0.8rem;color:#e8e6e1;border-bottom:1px solid #21262d1a;vertical-align:middle;max-width:250px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="{titulo}">{titulo_corto}</td>'
+                f'<td style="padding:8px 12px;font-size:0.8rem;color:#b3b8c2;border-bottom:1px solid #21262d1a;vertical-align:middle;">{marca}</td>'
+                f'<td style="padding:8px 12px;font-size:0.85rem;color:#e8e6e1;font-family:var(--font-mono);border-bottom:1px solid #21262d1a;vertical-align:middle;">{precio_str}</td>'
+                f'<td style="padding:8px 12px;font-size:0.85rem;font-family:var(--font-mono);border-bottom:1px solid #21262d1a;vertical-align:middle;">{diff_str}</td>'
+                f'<td style="padding:8px 12px;font-size:0.85rem;color:#e8e6e1;font-family:var(--font-mono);border-bottom:1px solid #21262d1a;vertical-align:middle;">{ventas_str}</td>'
+                f'<td style="padding:8px 12px;font-size:0.8rem;color:#e8e6e1;border-bottom:1px solid #21262d1a;vertical-align:middle;">{rating_str}</td>'
+                f'<td style="padding:8px 12px;font-size:0.8rem;color:#e8e6e1;border-bottom:1px solid #21262d1a;vertical-align:middle;">{reviews_str}</td>'
+                f'<td style="padding:8px 12px;font-size:1.1rem;border-bottom:1px solid #21262d1a;vertical-align:middle;text-align:center;">{badge_str}</td>'
+                f'<td style="padding:8px 12px;font-size:1.1rem;border-bottom:1px solid #21262d1a;vertical-align:middle;text-align:center;">{cupon_str}</td>'
+                f'<td style="padding:8px 12px;font-size:1.1rem;border-bottom:1px solid #21262d1a;vertical-align:middle;text-align:center;">{buybox_str}</td>'
+                f'<td style="padding:8px 12px;font-size:1.1rem;border-bottom:1px solid #21262d1a;vertical-align:middle;text-align:center;">{premium_str}</td>'
+                f'<td style="padding:8px 12px;border-bottom:1px solid #21262d1a;vertical-align:middle;text-align:center;">{link_tag}</td>'
+            )
+            rows_html += f'<tr style="transition:background 0.15s;" onmouseover="this.style.background=\'#1c2330\'" onmouseout="this.style.background=\'transparent\'">{cells}</tr>'
         
-        df_tabla = pd.DataFrame(tabla_competidores)
-        
-        # Mostrar tabla
-        df_tabla = pd.DataFrame(tabla_competidores)
+        # Cabeceras pegajosas y Z-Index para el scroll
+        headers_list = ['Img', 'Producto', 'Marca', 'Precio', 'Diff. Precio', 'Ventas', 'Rating', 'Reviews', 'Badge', 'Cupón', 'Buy Box', 'Premium', 'Link']
+        headers_html = ''.join(f'<th style="position:sticky; top:0; background:#161b22; z-index:10; padding:10px 12px; text-align:center; font-size:0.7rem; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:#8b9099; border-bottom:1px solid #21262d; white-space:nowrap;">{col}</th>' for col in headers_list)
 
-        # Generar tabla HTML
-        headers = ''.join(f'<th style="padding:8px 12px;text-align:left;font-size:0.7rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#4a5260;border-bottom:1px solid #21262d;">{col}</th>' for col in df_tabla.columns)
-        rows = ''
-        for _, row in df_tabla.iterrows():
-            cells = ''.join(f'<td style="padding:8px 12px;font-size:0.8rem;color:#e8e6e1;border-bottom:1px solid #21262d1a;">{val}</td>' for val in row)
-            rows += f'<tr style="transition:background 0.15s;" onmouseover="this.style.background=\'#1c2330\'" onmouseout="this.style.background=\'transparent\'">{cells}</tr>'
-
-        st.markdown(f'''
-        <div style="overflow-x:auto;overflow-y:auto;max-height:400px;border:1px solid #21262d;border-radius:6px;">
-            <table style="width:100%;border-collapse:collapse;background:#161b22;">
-                <thead style="position:sticky;top:0;background:#161b22;z-index:1;">
-                    <tr>{headers}</tr>
-                </thead>
-                <tbody>{rows}</tbody>
+        html_completo = f"""
+        <div style="overflow-x:auto; overflow-y:auto; max-height:400px; border:1px solid #21262d; border-radius:6px; margin-top:10px; position:relative; display:block;">
+            <table style="width:100%; border-collapse:collapse; background:#161b22;">
+                <thead><tr>{headers_html}</tr></thead>
+                <tbody>{rows_html}</tbody>
             </table>
         </div>
-        ''', unsafe_allow_html=True)
+        """
+        st.markdown(html_completo, unsafe_allow_html=True)
         
         # Insights de competidores
         st.markdown("#### Insights Clave")
@@ -2032,12 +2072,27 @@ if st.session_state.producto_seleccionado_idx is not None:
                             st.success("🏆 **¡Posición de ventaja!** Tu producto ya cuenta con las palancas clave para tu segmento. Céntrate en mantener el precio sugerido y conseguir más reviews orgánicas.")
 
                         st.markdown("---")
-                        st.markdown('<div class="section-label">Análisis de Competencia</div>', unsafe_allow_html=True)
+                        
+                        # --- NUEVOS TÍTULOS GIGANTES Y EXPLICATIVOS ---
+                        st.markdown(f'''
+                            <div style="margin-top:1.5rem; margin-bottom:2rem;">
+                                <span style="font-family:var(--font-mono); font-size:0.85rem; color:var(--gold); letter-spacing:0.15em; text-transform:uppercase;">
+                                    Simulación Estratégica
+                                </span>
+                                <h2 style="font-family:var(--font-display); font-size:2.6rem; font-weight:300; color:#ffffff; margin:0.3rem 0;">
+                                    Tu Posicionamiento a <span style="color:var(--gold); font-weight:600;">{precio_predicho:.2f} €</span>
+                                </h2>
+                                <p style="color:#b3b8c2; font-size:1.05rem; margin-top:0.4rem; line-height:1.5;">
+                                    Descubre cómo cambia tu mapa de batalla si adoptas el precio sugerido. 
+                                    A partir de aquí, <b>comparamos a tus rivales directamente contra tu nuevo Objetivo IA</b>.
+                                </p>
+                            </div>
+                        ''', unsafe_allow_html=True)
 
-                        tab1, tab2, tab3 = st.tabs(["Productos Similares (Precio)", "Posicionamiento de Mercado", "Estadísticas de Categoría"])
+                        tab1, tab2 = st.tabs(["Productos Similares (Precio)", "Posicionamiento de Mercado"])
 
                         with tab1:
-                            # 1. Recuperamos los verdaderos rivales (El bucket de KNN que creamos arriba)
+                            # 1. Recuperamos los verdaderos rivales (El bucket de KNN)
                             if 'df_bucket' in locals() and len(df_bucket) > 0:
                                 df_plot = df_bucket.copy()
                             else:
@@ -2045,195 +2100,285 @@ if st.session_state.producto_seleccionado_idx is not None:
                             
                             df_plot['short_title'] = df_plot['original_title'].apply(lambda x: str(x)[:55] + '...' if len(str(x)) > 55 else str(x))
                             
-                            # 2. ESCALA DE BURBUJAS (Reviews) - Mayor contraste visual usando raíz cuadrada
+                            # Escala de burbujas
                             max_rev = df_plot['reviews_real'].max() if len(df_plot) > 0 and df_plot['reviews_real'].max() > 0 else 1
                             df_plot['bubble_size'] = 8 + np.sqrt(df_plot['reviews_real'] / max_rev) * 45
 
                             fig = go.Figure()
 
-                            # --- TRAZA 1: COMPETIDORES DIRECTOS (Burbujas dinámicas) ---
                             fig.add_trace(go.Scatter(
-                                x=df_plot['precio_real'],
-                                y=df_plot['ventas_mes_real'],
+                                x=df_plot['precio_real'], y=df_plot['ventas_mes_real'],
                                 mode='markers',
-                                marker=dict(
-                                    size=df_plot['bubble_size'],
-                                    color='#388bfd', 
-                                    opacity=0.5,
-                                    line=dict(width=1, color='#8b9099')
-                                ),
+                                marker=dict(size=df_plot['bubble_size'], color='#388bfd', opacity=0.5, line=dict(width=1, color='#8b9099')),
                                 customdata=np.stack((df_plot['brand'], df_plot['short_title'], df_plot['product_rating'], df_plot['reviews_real']), axis=-1),
+                                hovertemplate="<b style='color:#388bfd; font-size:1.1em;'>%{customdata[0]}</b><br><span style='color:#b3b8c2;'>%{customdata[1]}</span><br><br><b>Precio:</b> %{x:.2f} €<br><b>Ventas/mes:</b> %{y:.0f}<br><b>Rating:</b> %{customdata[2]:.1f} ⭐<br><b>Reviews:</b> %{customdata[3]}<br><extra></extra>",
+                                name="Rivales Directos (KNN)"
+                            ))
+
+                            fig.add_annotation(
+                                x=precio_predicho, y=producto_seleccionado['ventas_mes_real'],
+                                ax=producto_seleccionado['precio_real'], ay=producto_seleccionado['ventas_mes_real'],
+                                xref="x", yref="y", axref="x", ayref="y",
+                                text="", showarrow=True, arrowhead=2, arrowsize=1.2, arrowwidth=1, arrowcolor="#c9933a", opacity=0.6
+                            )
+
+                            fig.add_trace(go.Scatter(
+                                x=[producto_seleccionado['precio_real']], y=[producto_seleccionado['ventas_mes_real']],
+                                mode='markers', marker=dict(size=10, color='#e5534b', opacity=0.4), hoverinfo='skip', name="Posición Actual"
+                            ))
+
+                            fig.add_trace(go.Scatter(
+                                x=[precio_predicho], y=[producto_seleccionado['ventas_mes_real']],
+                                mode='markers+text', marker=dict(size=16, color='#c9933a', symbol='diamond', line=dict(width=2, color='#e8e6e1')),
+                                text=['TARGET IA'], textposition='top center', textfont=dict(size=11, color='#c9933a', family='DM Mono', weight='bold'),
+                                hovertemplate="<b style='color:#c9933a'>TU NUEVO POSICIONAMIENTO</b><br><b>Precio Óptimo:</b> %{x:.2f} €<br><b>Ventas Actuales:</b> %{y:.0f}<br><extra></extra>",
+                                name='Objetivo IA'
+                            ))
+
+                            if len(df_plot) > 0:
+                                median_price = df_plot['precio_real'].median()
+                                median_sales = df_plot['ventas_mes_real'].median()
+                                fig.add_hline(y=median_sales, line_dash="dot", line_color="#4a5260", opacity=0.5, annotation_text="Ventas Medias", annotation_font_color="#8b9099", annotation_position="bottom right")
+                                fig.add_vline(x=median_price, line_dash="dot", line_color="#4a5260", opacity=0.5, annotation_text="Precio Medio", annotation_font_color="#8b9099", annotation_position="top left")
+
+                            fig.update_layout(**PLOTLY_DARK)
+                            fig.update_layout(
+                                title=dict(text=f"Mapa de Batalla: {len(df_plot)} Rivales encontrados por IA (KNN)", font=dict(color='#e8e6e1', size=16, family='Cormorant Garamond')),
+                                xaxis_title="Precio (€)", yaxis_title="Ventas último mes", height=550, showlegend=True,
+                                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='rgba(17,20,24,0.8)'),
+                                hoverlabel=dict(bgcolor="#161b22", bordercolor="#21262d", font_size=13, font_family="DM Sans")
+                            )
+                            fig.add_annotation(text="* El tamaño de la burbuja representa el volumen de Reviews", xref="paper", yref="paper", x=0, y=-0.12, showarrow=False, font=dict(color="#4a5260", size=11, family="DM Sans"))
+                            st.plotly_chart(fig, use_container_width=True)
+
+                            # --- TITULAR GIGANTE PARA LA TABLA ---
+                            st.markdown(f'''
+                                <div style="margin-top:3.5rem; margin-bottom:1.5rem;">
+                                    <h3 style="font-family:var(--font-display); font-size:1.8rem; font-weight:400; color:#ffffff; margin:0;">
+                                        Radiografía de Competidores Directos
+                                    </h3>
+                                    <p style="color:#8b9099; font-size:0.95rem; margin-top:0.4rem;">
+                                        La columna <b>"Diff. Precio"</b> compara a tus rivales contra tu nuevo <b>Precio Sugerido ({precio_predicho:.2f} €)</b>. 
+                                        <span style="color:#2ea84c; font-weight:600;">
+                                    </p>
+                                </div>
+                            ''', unsafe_allow_html=True)
+
+                            # --- TABLA HTML ---
+                            comparison_df = df_plot.copy()
+                            if 'ventas_mes_real' in comparison_df.columns:
+                                comparison_df = comparison_df.sort_values('ventas_mes_real', ascending=False)
+                            
+                            rows_html = ""
+                            for _, comp in comparison_df.iterrows():
+                                # AHORA LA MATEMÁTICA SE CALCULA CONTRA EL PRECIO DE LA IA, NO EL ACTUAL
+                                diff_precio = comp.get('precio_real', 0) - precio_predicho
+                                color_diff = "#e5534b" if diff_precio < 0 else ("#2ea84c" if diff_precio > 0 else "#8b9099")
+                                
+                                img_url = comp.get('product_image_url', '')
+                                img_tag = f'<img src="{img_url}" style="width:40px;height:40px;object-fit:contain;border-radius:4px;background:#fff;padding:2px;">' if pd.notna(img_url) and img_url else 'N/A'
+                                
+                                titulo = str(comp.get('original_title', ''))
+                                titulo_corto = titulo[:55] + '...' if len(titulo) > 55 else titulo
+                                
+                                marca = str(comp.get('brand', ''))
+                                precio_str = f"{comp.get('precio_real', 0):.2f} €"
+                                diff_str = f'<span style="color:{color_diff}; font-weight:600;">{diff_precio:+.2f} €</span>'
+                                ventas_str = f"{int(comp.get('ventas_mes_real', 0))} uds"
+                                rating_str = f"{comp.get('product_rating', 0):.1f} ⭐"
+                                reviews_str = f"{int(comp.get('reviews_real', 0))}"
+                                
+                                badge_str = '🏆' if comp.get('is_best_seller') == 'Yes' else ''
+                                cupon_str = '🎟️' if comp.get('has_coupon') == 1 else ''
+                                buybox_str = '📦' if comp.get('buy_box_availability') == 1 else ''
+                                premium_str = '👑' if comp.get('is_premium_brand') else ''
+                                
+                                link_url = str(comp.get('product_url', ''))
+                                if link_url and link_url.lower() != 'nan':
+                                    link_url = link_url.split(',202')[0]
+                                    if link_url.startswith('/'):
+                                        link_url = f"https://www.amazon.es{link_url}"
+                                    link_tag = f'<a href="{link_url}" target="_blank" style="color:#c9933a;text-decoration:none;font-weight:600;font-size:0.75rem;">Ver ↗️</a>'
+                                else:
+                                    link_tag = ''
+                                
+                                cells = (
+                                    f'<td style="padding:8px 12px;border-bottom:1px solid #21262d1a;vertical-align:middle;text-align:center;">{img_tag}</td>'
+                                    f'<td style="padding:8px 12px;font-size:0.8rem;color:#e8e6e1;border-bottom:1px solid #21262d1a;vertical-align:middle;max-width:250px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="{titulo}">{titulo_corto}</td>'
+                                    f'<td style="padding:8px 12px;font-size:0.8rem;color:#b3b8c2;border-bottom:1px solid #21262d1a;vertical-align:middle;">{marca}</td>'
+                                    f'<td style="padding:8px 12px;font-size:0.85rem;color:#e8e6e1;font-family:var(--font-mono);border-bottom:1px solid #21262d1a;vertical-align:middle;">{precio_str}</td>'
+                                    f'<td style="padding:8px 12px;font-size:0.85rem;font-family:var(--font-mono);border-bottom:1px solid #21262d1a;vertical-align:middle;">{diff_str}</td>'
+                                    f'<td style="padding:8px 12px;font-size:0.85rem;color:#e8e6e1;font-family:var(--font-mono);border-bottom:1px solid #21262d1a;vertical-align:middle;">{ventas_str}</td>'
+                                    f'<td style="padding:8px 12px;font-size:0.8rem;color:#e8e6e1;border-bottom:1px solid #21262d1a;vertical-align:middle;">{rating_str}</td>'
+                                    f'<td style="padding:8px 12px;font-size:0.8rem;color:#e8e6e1;border-bottom:1px solid #21262d1a;vertical-align:middle;">{reviews_str}</td>'
+                                    f'<td style="padding:8px 12px;font-size:1.1rem;border-bottom:1px solid #21262d1a;vertical-align:middle;text-align:center;">{badge_str}</td>'
+                                    f'<td style="padding:8px 12px;font-size:1.1rem;border-bottom:1px solid #21262d1a;vertical-align:middle;text-align:center;">{cupon_str}</td>'
+                                    f'<td style="padding:8px 12px;font-size:1.1rem;border-bottom:1px solid #21262d1a;vertical-align:middle;text-align:center;">{buybox_str}</td>'
+                                    f'<td style="padding:8px 12px;font-size:1.1rem;border-bottom:1px solid #21262d1a;vertical-align:middle;text-align:center;">{premium_str}</td>'
+                                    f'<td style="padding:8px 12px;border-bottom:1px solid #21262d1a;vertical-align:middle;text-align:center;">{link_tag}</td>'
+                                )
+                                rows_html += f'<tr style="transition:background 0.15s;" onmouseover="this.style.background=\'#1c2330\'" onmouseout="this.style.background=\'transparent\'">{cells}</tr>'
+                            
+                            headers_list = ['Img', 'Producto', 'Marca', 'Precio', 'Diff. Precio', 'Ventas', 'Rating', 'Reviews', 'Badge', 'Cupón', 'Buy Box', 'Premium', 'Link']
+                            headers_html = ''.join(f'<th style="position:sticky; top:0; background:#161b22; z-index:10; padding:10px 12px; text-align:center; font-size:0.7rem; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:#8b9099; border-bottom:1px solid #21262d; white-space:nowrap;">{col}</th>' for col in headers_list)
+
+                            html_completo = f"""
+                            <div style="overflow-x:auto; overflow-y:auto; max-height:450px; border:1px solid #21262d; border-radius:6px; margin-top:10px; position:relative; display:block;">
+                            <table style="width:100%; border-collapse:collapse; background:#161b22;">
+                            <thead><tr>{headers_html}</tr></thead>
+                            <tbody>{rows_html}</tbody>
+                            </table>
+                            </div>
+                            """
+                            st.markdown(html_completo, unsafe_allow_html=True)
+                            
+                                
+                        with tab2:
+                            # 1. Recuperamos tus rivales directos
+                            if 'df_bucket' in locals() and len(df_bucket) > 0:
+                                df_plot_t2 = df_bucket.copy()
+                            else:
+                                df_plot_t2 = df[(df['subtype'] == producto_seleccionado['subtype'])]
+                                
+                            df_plot_t2['short_title'] = df_plot_t2['original_title'].apply(lambda x: str(x)[:55] + '...' if len(str(x)) > 55 else str(x))
+                            
+                            st.markdown(f'''
+                                <div style="margin-top:0.5rem; margin-bottom:1.5rem;">
+                                    <h3 style="font-family:var(--font-display); font-size:1.6rem; font-weight:400; color:#ffffff; margin:0;">
+                                        Relación Precio vs Calidad (Rating)
+                                    </h3>
+                                    <p style="color:#8b9099; font-size:0.95rem; margin-top:0.4rem;">
+                                        Descubre si tu nuevo <b>Objetivo IA</b> te sitúa como una opción "Low Cost", "Premium" o "Calidad-Precio" frente a tus verdaderos rivales.
+                                    </p>
+                                </div>
+                            ''', unsafe_allow_html=True)
+
+                            # 2. Configurar la Gráfica de Cuadrantes
+                            max_sales = df_plot_t2['ventas_mes_real'].max() if len(df_plot_t2) > 0 and df_plot_t2['ventas_mes_real'].max() > 0 else 1
+                            df_plot_t2['bubble_size'] = 10 + np.sqrt(df_plot_t2['ventas_mes_real'] / max_sales) * 35
+
+                            fig2 = go.Figure()
+
+                            # Traza 1: Competidores
+                            fig2.add_trace(go.Scatter(
+                                x=df_plot_t2['precio_real'],
+                                y=df_plot_t2['product_rating'],
+                                mode='markers',
+                                marker=dict(size=df_plot_t2['bubble_size'], color='#388bfd', opacity=0.5, line=dict(width=1, color='#8b9099')),
+                                customdata=np.stack((df_plot_t2['brand'], df_plot_t2['short_title'], df_plot_t2['ventas_mes_real'], df_plot_t2['reviews_real']), axis=-1),
                                 hovertemplate=(
                                     "<b style='color:#388bfd; font-size:1.1em;'>%{customdata[0]}</b><br>"
                                     "<span style='color:#b3b8c2;'>%{customdata[1]}</span><br><br>"
                                     "<b>Precio:</b> %{x:.2f} €<br>"
-                                    "<b>Ventas/mes:</b> %{y:.0f}<br>"
-                                    "<b>Rating:</b> %{customdata[2]:.1f} ⭐<br>"
-                                    "<b>Reviews:</b> %{customdata[3]} <i>(Tamaño burbuja)</i><br>"
+                                    "<b>Rating:</b> %{y:.1f} ⭐<br>"
+                                    "<b>Ventas/mes:</b> %{customdata[2]}<br>"
                                     "<extra></extra>"
                                 ),
-                                name="Rivales Directos (KNN)"
+                                name="Rivales Directos"
                             ))
 
-                            # --- TRAZA 2: MOVIMIENTO ESTRATÉGICO (Flecha ultra fina) ---
-                            fig.add_annotation(
-                                x=precio_predicho, 
-                                y=producto_seleccionado['ventas_mes_real'],
-                                ax=producto_seleccionado['precio_real'],
-                                ay=producto_seleccionado['ventas_mes_real'],
+                            # Traza 2: Línea de movimiento (Estrategia)
+                            fig2.add_annotation(
+                                x=precio_predicho, y=producto_seleccionado['product_rating'],
+                                ax=producto_seleccionado['precio_real'], ay=producto_seleccionado['product_rating'],
                                 xref="x", yref="y", axref="x", ayref="y",
-                                text="", showarrow=True, arrowhead=2, 
-                                arrowsize=1.2, arrowwidth=1, # <--- FLECHA FINA Y SUTIL
-                                arrowcolor="#c9933a", opacity=0.6
+                                text="", showarrow=True, arrowhead=2, arrowsize=1.2, arrowwidth=1.5, arrowcolor="#c9933a", opacity=0.6
                             )
 
-                            # --- TRAZA 3: TU PRECIO ACTUAL (Punto de origen) ---
-                            fig.add_trace(go.Scatter(
-                                x=[producto_seleccionado['precio_real']],
-                                y=[producto_seleccionado['ventas_mes_real']],
-                                mode='markers',
-                                marker=dict(size=10, color='#e5534b', opacity=0.4), 
-                                hoverinfo='skip',
-                                name="Posición Actual"
+                            # Traza 3: Posición Actual
+                            fig2.add_trace(go.Scatter(
+                                x=[producto_seleccionado['precio_real']], y=[producto_seleccionado['product_rating']],
+                                mode='markers', marker=dict(size=10, color='#e5534b', opacity=0.4), hoverinfo='skip', name="Posición Actual"
                             ))
 
-                            # --- TRAZA 4: TU NUEVO PRECIO ÓPTIMO (Diamante Profesional) ---
-                            fig.add_trace(go.Scatter(
-                                x=[precio_predicho],
-                                y=[producto_seleccionado['ventas_mes_real']],
-                                mode='markers+text',
-                                marker=dict(
-                                    size=16, 
-                                    color='#c9933a', 
-                                    symbol='diamond', # <--- LOOK CORPORATIVO
-                                    line=dict(width=2, color='#e8e6e1')
-                                ),
-                                text=['TARGET IA'],
-                                textposition='top center',
-                                textfont=dict(size=11, color='#c9933a', family='DM Mono', weight='bold'),
-                                hovertemplate=(
-                                    "<b style='color:#c9933a'>TU NUEVO POSICIONAMIENTO</b><br>"
-                                    "<b>Precio Óptimo:</b> %{x:.2f} €<br>"
-                                    "<b>Ventas Actuales:</b> %{y:.0f}<br>"
-                                    "<extra></extra>"
-                                ),
+                            # Traza 4: Objetivo IA
+                            fig2.add_trace(go.Scatter(
+                                x=[precio_predicho], y=[producto_seleccionado['product_rating']],
+                                mode='markers+text', marker=dict(size=18, color='#c9933a', symbol='diamond', line=dict(width=2, color='#e8e6e1')),
+                                text=['TARGET IA'], textposition='top center', textfont=dict(size=11, color='#c9933a', family='DM Mono', weight='bold'),
+                                hovertemplate="<b style='color:#c9933a'>NUEVO POSICIONAMIENTO</b><br><b>Precio IA:</b> %{x:.2f} €<br><b>Rating:</b> %{y:.1f} ⭐<br><extra></extra>",
                                 name='Objetivo IA'
                             ))
 
-                            # --- LÍNEAS DE CUADRANTES ---
-                            if len(df_plot) > 0:
-                                median_price = df_plot['precio_real'].median()
-                                median_sales = df_plot['ventas_mes_real'].median()
-                                
-                                fig.add_hline(y=median_sales, line_dash="dot", line_color="#4a5260", opacity=0.5, 
-                                              annotation_text="Ventas Medias", annotation_font_color="#8b9099", annotation_position="bottom right")
-                                fig.add_vline(x=median_price, line_dash="dot", line_color="#4a5260", opacity=0.5, 
-                                              annotation_text="Precio Medio", annotation_font_color="#8b9099", annotation_position="top left")
+                            # Medianas del nicho para dibujar los cuadrantes
+                            if len(df_plot_t2) > 0:
+                                median_price = df_plot_t2['precio_real'].median()
+                                median_rating = df_plot_t2['product_rating'].median()
+                                fig2.add_hline(y=median_rating, line_dash="dot", line_color="#4a5260", opacity=0.5, annotation_text=f"Rating Medio ({median_rating:.1f})", annotation_font_color="#8b9099", annotation_position="bottom right")
+                                fig2.add_vline(x=median_price, line_dash="dot", line_color="#4a5260", opacity=0.5, annotation_text=f"Precio Medio ({median_price:.2f}€)", annotation_font_color="#8b9099", annotation_position="top left")
 
-                            # --- LAYOUT Y DISEÑO PREMIUM ---
-                            fig.update_layout(**PLOTLY_DARK)
-                            fig.update_layout(
-                                title=dict(
-                                    text=f"Mapa de Batalla: {len(df_plot)} Rivales encontrados por IA (KNN)",
-                                    font=dict(color='#e8e6e1', size=16, family='Cormorant Garamond')
-                                ),
-                                xaxis_title="Precio (€)",
-                                yaxis_title="Ventas último mes",
-                                height=550,
+                            # Aplicamos estilos y corregimos el "undefined" forzando un título vacío
+                            fig2.update_layout(**PLOTLY_DARK)
+                            fig2.update_layout(
+                                title=dict(text=""), # <--- ESTO ELIMINA EL "undefined"
+                                xaxis_title="Precio (€)", 
+                                yaxis_title="Calidad Percibida (Rating ⭐)", 
+                                height=500, 
                                 showlegend=True,
-                                legend=dict(
-                                    orientation="h", 
-                                    yanchor="bottom", y=1.02, 
-                                    xanchor="right", x=1, 
-                                    bgcolor='rgba(17,20,24,0.8)'
-                                ),
-                                hoverlabel=dict(bgcolor="#161b22", bordercolor="#21262d", font_size=13, font_family="DM Sans")
+                                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='rgba(17,20,24,0.8)'),
+                                hoverlabel=dict(bgcolor="#161b22", bordercolor="#21262d", font_size=13, font_family="DM Sans"),
+                                yaxis=dict(range=[max(0, df_plot_t2['product_rating'].min() - 0.5), min(5.1, df_plot_t2['product_rating'].max() + 0.5)]),
+                                margin=dict(t=30) # Reducimos el margen superior para que quede más compacto
                             )
                             
-                            # Añadimos una nota al pie en la propia gráfica para que quede claro lo del tamaño
-                            fig.add_annotation(
-                                text="* El tamaño de la burbuja representa el volumen de Reviews",
-                                xref="paper", yref="paper", x=0, y=-0.12, showarrow=False,
+                            # Añadimos la leyenda del tamaño de la burbuja en la esquina inferior izquierda
+                            fig2.add_annotation(
+                                text="* El tamaño de la burbuja representa el volumen de Ventas Mensuales",
+                                xref="paper", yref="paper", x=0, y=-0.14, showarrow=False,
                                 font=dict(color="#4a5260", size=11, family="DM Sans")
                             )
-                            
-                            st.plotly_chart(fig, use_container_width=True)
 
-                            # --- TABLA DE DETALLES ---
-                            with st.expander("Ver tabla completa de rivales directos (KNN)"):
-                                comparison_df = df_plot[[
-                                    'brand', 'original_title', 'precio_real', 'ventas_mes_real',
-                                    'product_rating', 'reviews_real'
-                                ]].copy()
-                                comparison_df.columns = [
-                                    'Marca', 'Producto', 'Precio (€)', 'Ventas/mes', 'Rating', 'Reviews'
-                                ]
-                                comparison_df = comparison_df.sort_values('Ventas/mes', ascending=False)
-                                comparison_df['Precio (€)'] = comparison_df['Precio (€)'].apply(lambda x: f"{x:.2f}")
-                                comparison_df['Ventas/mes'] = comparison_df['Ventas/mes'].apply(lambda x: f"{int(x)}")
-                                comparison_df['Rating']     = comparison_df['Rating'].apply(lambda x: f"{x:.1f}")
-                                comparison_df['Reviews']    = comparison_df['Reviews'].apply(lambda x: f"{int(x)}")
-                                st.dataframe(comparison_df, use_container_width=True, height=350, hide_index=True)
-                        with tab2:
-                            df_categoria = df[df['category'] == producto_seleccionado['category']]
-                            fig2 = px.scatter(df_categoria, x="precio_real", y="product_rating", size="ventas_mes_real", color="market_tier", opacity=0.5,
-                                hover_data={"brand":True,"subtype":True,"precio_real":":.2f €","product_rating":":.2f","ventas_mes_real":":.0f"},
-                                title=f"Posicionamiento en categoría: {producto_seleccionado['category']}",
-                                labels={"precio_real":"Precio (€)","product_rating":"Rating"}, height=600)
-                            fig2.add_scatter(x=[producto_seleccionado['precio_real']], y=[producto_seleccionado['product_rating']],
-                                mode='markers+text', marker=dict(size=30, color='red', symbol='star', line=dict(width=3, color='white')),
-                                text=['TU PRODUCTO'], textposition='top center', textfont=dict(size=16, color='red', family='Arial Black'),
-                                name='TU PRODUCTO', showlegend=True)
-                            precio_medio = df_categoria['precio_real'].mean()
-                            rating_medio = df_categoria['product_rating'].mean()
-                            fig2.add_hline(y=rating_medio, line_dash="dash", line_color="gray",
-                                annotation_text=f"Rating medio: {rating_medio:.2f}", annotation_position="right")
-                            fig2.add_vline(x=precio_medio, line_dash="dash", line_color="gray",
-                                annotation_text=f"Precio medio: {precio_medio:.2f}€", annotation_position="top")
-                            fig2.update_layout(**PLOTLY_DARK)
                             st.plotly_chart(fig2, use_container_width=True)
-                            st.markdown('<p style="font-size:0.65rem;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:#4a5260;margin-top:1rem;">Tu Posicionamiento</p>', unsafe_allow_html=True)
-                            col_ins1, col_ins2, col_ins3, col_ins4 = st.columns(4)
-                            with col_ins1:
-                                pct_precio = (df_categoria['precio_real'] < producto_seleccionado['precio_real']).sum() / len(df_categoria) * 100
-                                st.metric("Percentil de Precio", f"{pct_precio:.0f}%")
-                            with col_ins2:
-                                pct_rating = (df_categoria['product_rating'] < producto_seleccionado['product_rating']).sum() / len(df_categoria) * 100
-                                st.metric("Percentil de Rating", f"{pct_rating:.0f}%")
-                            with col_ins3:
-                                pct_ventas = (df_categoria['ventas_mes_real'] < producto_seleccionado['ventas_mes_real']).sum() / len(df_categoria) * 100
-                                st.metric("Percentil de Ventas", f"{pct_ventas:.0f}%")
-                            with col_ins4:
-                                st.metric("Competidores en Categoría", len(df_categoria))
 
-                        with tab3:
-                            df_categoria = df[df['category'] == producto_seleccionado['category']]
-                            st.markdown("#### Estadísticas de tu Categoría")
-                            stats_cols = st.columns(3)
-                            with stats_cols[0]:
-                                st.markdown("##### Precios")
-                                st.metric("Precio Medio", f"{df_categoria['precio_real'].mean():.2f} €")
-                                st.metric("Precio Mediano", f"{df_categoria['precio_real'].median():.2f} €")
-                                st.metric("Rango", f"{df_categoria['precio_real'].min():.2f} – {df_categoria['precio_real'].max():.2f} €")
-                            with stats_cols[1]:
-                                st.markdown("##### Ratings")
-                                st.metric("Rating Medio", f"{df_categoria['product_rating'].mean():.2f}/5")
-                                st.metric("% Best Sellers", f"{(df_categoria['is_best_seller'] == 'Best Seller').sum() / len(df_categoria) * 100:.1f}%")
-                            with stats_cols[2]:
-                                st.markdown("##### Ventas")
-                                st.metric("Ventas Medias/mes", f"{int(df_categoria['ventas_mes_real'].mean())}")
-                                st.metric("Reviews Medias", f"{int(df_categoria['reviews_real'].mean())}")
-                            st.markdown("---")
-                            st.markdown("##### Distribución de Precios en la Categoría")
-                            fig_hist = px.histogram(df_categoria, x="precio_real", nbins=30,
-                                title=f"Distribución de precios en {producto_seleccionado['category']}",
-                                labels={"precio_real":"Precio (€)","count":"Nº productos"}, color_discrete_sequence=['#c9933a'])
-                            fig_hist.update_layout(**PLOTLY_DARK)
-                            fig_hist.add_vline(x=producto_seleccionado['precio_real'], line_dash="dash", line_color="#e5534b",
-                                annotation_text="Tu Precio", annotation_position="top")
-                            fig_hist.add_vline(x=precio_predicho, line_dash="dash", line_color="#2ea84c",
-                                annotation_text="Precio Sugerido", annotation_position="top")
-                            st.plotly_chart(fig_hist, use_container_width=True)
+                            # 3. Métricas Explicativas Nivel "Pro"
+                            st.markdown('<p style="font-size:0.75rem;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:#8b9099;margin-top:1.5rem;margin-bottom:1rem;">Lectura Estratégica</p>', unsafe_allow_html=True)
+                            
+                            col_ins1, col_ins2, col_ins3 = st.columns(3)
+                            
+                            if len(df_plot_t2) > 0:
+                                # Cálculos de impacto basados en el NUEVO precio
+                                pct_precio_nuevo = (df_plot_t2['precio_real'] > precio_predicho).sum() / len(df_plot_t2) * 100
+                                pct_precio_antiguo = (df_plot_t2['precio_real'] > producto_seleccionado['precio_real']).sum() / len(df_plot_t2) * 100
+                                
+                                pct_rating = (df_plot_t2['product_rating'] < producto_seleccionado['product_rating']).sum() / len(df_plot_t2) * 100
+                                dif_pct = pct_precio_nuevo - pct_precio_antiguo
+                                
+                                label_diff = f"<span style='color:var(--success); font-weight:600;'>+{dif_pct:.0f}%</span> de mejora" if dif_pct > 0 else (f"<span style='color:var(--danger); font-weight:600;'>{dif_pct:.0f}%</span>" if dif_pct < 0 else "Sin cambio")
+
+                                with col_ins1:
+                                    st.markdown(f"""
+                                    <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:1.2rem; height:100%;">
+                                        <div style="font-family:var(--font-body); font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:0.5rem;">Estrategia de Precio IA</div>
+                                        <div style="font-family:var(--font-mono); font-size:1.8rem; color:var(--gold); line-height:1.2; margin-bottom:0.5rem;">{pct_precio_nuevo:.0f}%</div>
+                                        <div style="font-size:0.85rem; color:var(--text-secondary); line-height:1.4;">
+                                            Con el Precio IA, serás <b>más barato que el {pct_precio_nuevo:.0f}%</b> de tus rivales directos. ({label_diff} vs tu precio actual).
+                                        </div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                
+                                with col_ins2:
+                                    color_rating = "var(--success)" if pct_rating >= 50 else "var(--warning)"
+                                    st.markdown(f"""
+                                    <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:1.2rem; height:100%;">
+                                        <div style="font-family:var(--font-body); font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:0.5rem;">Autoridad (Rating)</div>
+                                        <div style="font-family:var(--font-mono); font-size:1.8rem; color:{color_rating}; line-height:1.2; margin-bottom:0.5rem;">Top {100-pct_rating:.0f}%</div>
+                                        <div style="font-size:0.85rem; color:var(--text-secondary); line-height:1.4;">
+                                            Tu calificación ({producto_seleccionado['product_rating']:.1f} ⭐) <b>supera al {pct_rating:.0f}%</b> de los productos en tu anillo de competencia.
+                                        </div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                                
+                                with col_ins3:
+                                    st.markdown(f"""
+                                    <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:1.2rem; height:100%;">
+                                        <div style="font-family:var(--font-body); font-size:0.7rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:0.5rem;">Volumen de Análisis</div>
+                                        <div style="font-family:var(--font-mono); font-size:1.8rem; color:var(--info); line-height:1.2; margin-bottom:0.5rem;">{len(df_plot_t2)}</div>
+                                        <div style="font-size:0.85rem; color:var(--text-secondary); line-height:1.4;">
+                                            Competidores directos analizados para simular este escenario de mercado.
+                                        </div>
+                                    </div>
+                                    """, unsafe_allow_html=True)
+
                     else:
                         st.error(f"Error en la API: {response.text}")
                 except requests.exceptions.ConnectionError:
