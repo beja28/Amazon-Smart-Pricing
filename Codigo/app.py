@@ -1005,17 +1005,35 @@ if st.session_state.producto_seleccionado_idx is not None:
         
         # Calcular scores individuales (mismo método que Análisis de Mercado)
         # Score 1: Precio (mejor cerca de la mediana)
-        pct_precio = (df_subtipo['precio_real'] <= producto_seleccionado['precio_real']).sum() / len(df_subtipo) * 100
-        if pct_precio <= 50:
-            score_precio = 100 - (50 - pct_precio) * 0.6
+        banda_precio = df_subtipo[
+            (df_subtipo['precio_real'] >= producto_seleccionado['precio_real'] * 0.85) &
+            (df_subtipo['precio_real'] <= producto_seleccionado['precio_real'] * 1.15)
+        ]
+
+
+        if len(banda_precio) >= 3:
+            base = banda_precio
         else:
-            score_precio = 100 - (pct_precio - 50) * 2.0
+            n = max(10, int(len(df_subtipo) * 0.15))
+            base = (
+                df_subtipo.assign(
+                    diff=(df_subtipo["precio_real"] - producto_seleccionado["precio_real"]).abs()
+                )
+                .nsmallest(n, "diff")
+            )
+
+
+        score_precio = float((base["ventas_mes_real"] <= producto_seleccionado["ventas_mes_real"]).mean() * 100)
+        score_precio = float(np.clip(score_precio, 0, 100))
+        score_precio = float((base["ventas_mes_real"] <= producto_seleccionado["ventas_mes_real"]).mean() * 100)
         score_precio = float(np.clip(score_precio, 0, 100))
 
 
+
         # --- SCORE CALIDAD: rating bayesiano (suaviza productos con pocas reviews)
-        # m=50 significa que necesitas 50 reviews para que tu rating cuente al 50%
-        m = 50
+        # m= mediana siendo 20 el mínimo y 200 el máximo de reseñas
+        m_raw = float(df_subtipo['reviews_real'].median())
+        m = float(np.clip(m_raw, 20, 200))
         C = float(df_subtipo['product_rating'].mean())          # media del subtipo (prior)
         r = float(producto_seleccionado['product_rating'])
         v = float(producto_seleccionado['reviews_real'])
@@ -1438,12 +1456,25 @@ if st.session_state.producto_seleccionado_idx is not None:
         df_tabla = pd.DataFrame(tabla_competidores)
         
         # Mostrar tabla
-        st.dataframe(
-            df_tabla,
-            use_container_width=True,
-            height=400,
-            hide_index=True
-        )
+        df_tabla = pd.DataFrame(tabla_competidores)
+
+        # Generar tabla HTML
+        headers = ''.join(f'<th style="padding:8px 12px;text-align:left;font-size:0.7rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:#4a5260;border-bottom:1px solid #21262d;">{col}</th>' for col in df_tabla.columns)
+        rows = ''
+        for _, row in df_tabla.iterrows():
+            cells = ''.join(f'<td style="padding:8px 12px;font-size:0.8rem;color:#e8e6e1;border-bottom:1px solid #21262d1a;">{val}</td>' for val in row)
+            rows += f'<tr style="transition:background 0.15s;" onmouseover="this.style.background=\'#1c2330\'" onmouseout="this.style.background=\'transparent\'">{cells}</tr>'
+
+        st.markdown(f'''
+        <div style="overflow-x:auto;overflow-y:auto;max-height:400px;border:1px solid #21262d;border-radius:6px;">
+            <table style="width:100%;border-collapse:collapse;background:#161b22;">
+                <thead style="position:sticky;top:0;background:#161b22;z-index:1;">
+                    <tr>{headers}</tr>
+                </thead>
+                <tbody>{rows}</tbody>
+            </table>
+        </div>
+        ''', unsafe_allow_html=True)
         
         # Insights de competidores
         st.markdown("#### Insights Clave")
@@ -1626,21 +1657,43 @@ if st.session_state.producto_seleccionado_idx is not None:
         
         # Calcular scores individuales
         # Score 1: Precio (percentil de precio competitivo)
-        pct_precio = (df_subtipo['precio_real'] <= producto_seleccionado['precio_real']).sum() / len(df_subtipo) * 100
-        if pct_precio <= 50:
-            score_precio = 100 - (50 - pct_precio) * 0.6
+        banda_precio = df_subtipo[
+            (df_subtipo['precio_real'] >= producto_seleccionado['precio_real'] * 0.85) &
+            (df_subtipo['precio_real'] <= producto_seleccionado['precio_real'] * 1.15)
+        ]
+
+
+        if len(banda_precio) >= 3:
+            base = banda_precio
         else:
-            score_precio = 100 - (pct_precio - 50) * 2.0
+            n = max(10, int(len(df_subtipo) * 0.15))
+            base = (
+                df_subtipo.assign(
+                    diff=(df_subtipo["precio_real"] - producto_seleccionado["precio_real"]).abs()
+                )
+                .nsmallest(n, "diff")
+            )
+
+
+        score_precio = float((base["ventas_mes_real"] <= producto_seleccionado["ventas_mes_real"]).mean() * 100)
+        score_precio = float(np.clip(score_precio, 0, 100))
+        score_precio = float((base["ventas_mes_real"] <= producto_seleccionado["ventas_mes_real"]).mean() * 100)
         score_precio = float(np.clip(score_precio, 0, 100))
 
 
+        # Añadir la siguiente línea solo en la SECCIÓN 4
+        pct_precio = float((df_subtipo["precio_real"] <= producto_seleccionado["precio_real"]).mean() * 100)
+
+
         # Score 2: Calidad — rating bayesiano
-        m = 50
-        C = float(df_subtipo['product_rating'].mean())
+        # m= mediana siendo 20 el mínimo y 200 el máximo de reseñas
+        m_raw = float(df_subtipo['reviews_real'].median())
+        m = float(np.clip(m_raw, 20, 200))
+        C = float(df_subtipo['product_rating'].mean())          # media del subtipo (prior)
         r = float(producto_seleccionado['product_rating'])
         v = float(producto_seleccionado['reviews_real'])
-        bayes_rating  = (v / (v + m)) * r + (m / (v + m)) * C
-        score_calidad = float(np.clip((bayes_rating - 1) / 4 * 100, 0, 100))
+        bayes_rating  = (v / (v + m)) * r + (m / (v + m)) * C  # rating ajustado
+        score_calidad = float(np.clip((bayes_rating - 1) / 4 * 100, 0, 100))  # escala 1-5 → 0-100
 
 
         # Score 3: Popularidad — percentil en log(ventas)
