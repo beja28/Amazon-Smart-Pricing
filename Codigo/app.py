@@ -591,23 +591,20 @@ def get_knn_engine(df_market):
     return vectorizer, knn, df_valid
 
 def get_sample_products(n_products=5):
-    """Selecciona 5 productos aleatorios de 5 categorías distintas del CSV de test"""
+    """Selecciona hasta n productos aleatorios del CSV de test"""
     df_test = load_test_samples()
     if df_test is None or len(df_test) == 0:
         return []
 
-    categorias = df_test['category'].unique()
-    if len(categorias) < n_products:
-        n_products = len(categorias)
+    # Nos aseguramos de no pedir más productos de los que hay en el CSV
+    n = min(n_products, len(df_test))
 
-    categorias_seleccionadas = np.random.choice(categorias, size=n_products, replace=False)
+    # Seleccionamos los productos (aleatoriamente para que varíe el orden)
+    productos_seleccionados = df_test.sample(n=n, replace=False)
 
     productos_muestra = []
-    for categoria in categorias_seleccionadas:
-        productos_categoria = df_test[df_test['category'] == categoria]
-        if len(productos_categoria) > 0:
-            producto = productos_categoria.sample(n=1).iloc[0]
-            productos_muestra.append(producto)
+    for _, producto in productos_seleccionados.iterrows():
+        productos_muestra.append(producto)
 
     return productos_muestra
 
@@ -638,7 +635,7 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-col_refresh = st.columns([2, 3, 1])
+col_refresh = st.columns([3, 1])
 
 with col_refresh[1]:
     df_test_search = load_test_samples()
@@ -676,14 +673,23 @@ with col_refresh[1]:
             else:
                 st.caption("Sin resultados para esa búsqueda.")
 
-with col_refresh[2]:
-    if st.button("Cambiar Productos", use_container_width=True, key="refresh_products"):
-        st.session_state.productos_muestra = get_sample_products()
-        st.session_state.producto_seleccionado_idx = None
-        st.rerun()
+# with col_refresh[2]:
+#     if st.button("Cambiar Productos", use_container_width=True, key="refresh_products"):
+#         st.session_state.productos_muestra = get_sample_products()
+#         st.session_state.producto_seleccionado_idx = None
+#         st.rerun()
 
 # --- 3. CARRUSEL DE PRODUCTOS ---
-st.markdown('<div class="section-label">Catálogo de Productos</div>', unsafe_allow_html=True)
+st.markdown('''
+    <div style="margin-top:1rem; margin-bottom:1.5rem;">
+        <h2 style="font-family:var(--font-display); font-size:2.4rem; font-weight:300; color:#ffffff; margin:0.3rem 0;">
+            Catálogo de <span style="color:var(--gold); font-weight:300;">Productos</span>
+        </h2>
+        <p style="color:#8b9099; font-size:0.95rem; margin-top:0.4rem;">
+            Selecciona un producto de tu inventario para analizar su posicionamiento y <b>descubrir su precio óptimo</b>.
+        </p>
+    </div>
+''', unsafe_allow_html=True)
 
 cols = st.columns(5)
 
@@ -869,7 +875,19 @@ body {{ background:transparent; overflow:hidden; }}
 if st.session_state.producto_seleccionado_idx is not None:
     producto_seleccionado = st.session_state.productos_muestra[st.session_state.producto_seleccionado_idx]
     
-    st.markdown('<div class="section-label">Análisis del Producto Seleccionado</div>', unsafe_allow_html=True)
+    st.markdown(f'''
+        <div style="margin-top:2rem; margin-bottom:1.5rem;">
+            <span style="font-family:var(--font-mono); font-size:0.85rem; color:var(--gold); letter-spacing:0.15em; text-transform:uppercase;">
+                Ficha Técnica
+            </span>
+            <h2 style="font-family:var(--font-display); font-size:2.6rem; font-weight:300; color:#ffffff; margin:0.3rem 0;">
+                Análisis del <span style="color:var(--gold); font-weight:300;">Producto Seleccionado</span>
+            </h2>
+            <p style="color:#8b9099; font-size:0.95rem; margin-top:0.4rem;">
+                Revisa las métricas actuales, características y el rendimiento general antes de explorar su <b>posicionamiento en el mercado</b>.
+            </p>
+        </div>
+    ''', unsafe_allow_html=True)
     
     det_col1, det_col2, det_col3 = st.columns([1, 2, 1])
     
@@ -951,16 +969,16 @@ if st.session_state.producto_seleccionado_idx is not None:
     
     # --- CONTENIDO DE CADA TAB ---
     
-    # ==================== TAB 1: RESUMEN ====================
+# ==================== TAB 1: RESUMEN ====================
     if st.session_state.selected_tab == 'resumen':
-        st.markdown('<div class="section-label">Resumen del Producto</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-label" style="color: #ffffff; font-size: 0.85rem;">Resumen del Producto</div>', unsafe_allow_html=True)
         
         # KPIs comparativos - Filtrar por categoría Y subtipo
         df_categoria = df[df['category'] == producto_seleccionado['category']]
         df_subtipo = df[df['subtype'] == producto_seleccionado['subtype']]
         
         st.markdown('<p style="font-size:0.8rem;color:#8b9099;margin-bottom:1rem;">Tu producto vs promedio del subtipo</p>', unsafe_allow_html=True)
-        
+                
         kpi_cols = st.columns(4)
         
         with kpi_cols[0]:
@@ -1000,8 +1018,9 @@ if st.session_state.producto_seleccionado_idx is not None:
                 delta=f"{int(diff_reviews):+} vs promedio"
             )
         
-        st.markdown("---")
-        st.markdown('<div class="section-label">Diagnóstico Rápido</div>', unsafe_allow_html=True)
+        st.markdown('\n')
+        st.markdown('<div class="section-label" style="color: #ffffff; font-size: 0.85rem;">Diagnóstico Rápido', unsafe_allow_html=True)
+
         
         # Calcular scores individuales (mismo método que Análisis de Mercado)
         # Score 1: Precio (mejor cerca de la mediana)
@@ -1110,18 +1129,29 @@ if st.session_state.producto_seleccionado_idx is not None:
     
     # ==================== TAB 2: ANÁLISIS DE MERCADO ====================
     elif st.session_state.selected_tab == 'mercado':
-        st.markdown('<div class="section-label">Análisis de Mercado</div>', unsafe_allow_html=True)
-        st.markdown('<p style="font-size:0.8rem;color:#8b9099;margin-bottom:2rem;">Entiende tu posición competitiva y oportunidades de mejora</p>', unsafe_allow_html=True)
+        st.markdown('''
+            <div style="margin-top:1.5rem; margin-bottom:1.5rem;">
+                <span style="font-family:var(--font-mono); font-size:0.85rem; color:var(--gold); letter-spacing:0.15em; text-transform:uppercase;">
+                    Inteligencia Competitiva
+                </span>
+                <h2 style="font-family:var(--font-display); font-size:2.6rem; font-weight:300; color:#ffffff; margin:0.3rem 0;">
+                    Análisis de <span style="color:var(--gold); font-weight:300;">Mercado</span>
+                </h2>
+                <p style="color:#8b9099; font-size:0.95rem; margin-top:0.4rem;">
+                    Entiende tu posición frente a la competencia, detecta oportunidades de mejora y descubre <b>qué factores impulsan las ventas</b>.
+                </p>
+            </div>
+        ''', unsafe_allow_html=True)
         st.markdown("---")
         
         # Obtener datos de la categoría y subtipo
         df_categoria = df[df['category'] == producto_seleccionado['category']]
         df_subtipo = df[df['subtype'] == producto_seleccionado['subtype']]
         
-                # ========== SECCIÓN 1: TU POSICIÓN EN EL MERCADO ==========
-        st.markdown('<span class="section-heading-num">01</span><div class="section-heading">Tu Posición en el Mercado</div>', unsafe_allow_html=True)
-        st.caption("¿Dónde estoy yo en mi subtipo?")
-
+        # ========== SECCIÓN 1: TU POSICIÓN EN EL MERCADO ==========
+        st.markdown('<div class="section-label" style="color: #ffffff; font-size: 0.85rem; margin-top: 1.5rem;">Tu Posición en el Mercado</div>', unsafe_allow_html=True)
+        st.markdown('<p style="font-size:0.8rem;color:#8b9099;margin-bottom:1.5rem;">¿Dónde se sitúa tu producto dentro de su subtipo en términos de precio y volumen de ventas?</p>', unsafe_allow_html=True)
+        
         # Cuartiles P25 y P75
         precio_p25 = df_subtipo['precio_real'].quantile(0.25)
         precio_p75 = df_subtipo['precio_real'].quantile(0.75)
@@ -1183,20 +1213,20 @@ if st.session_state.producto_seleccionado_idx is not None:
             name='Competidores', showlegend=True
         ))
 
-        # Tu producto
+        # Tu producto (Diseño elegante y sutil)
         fig1.add_trace(go.Scatter(
             x=[producto_seleccionado['precio_real']],
             y=[producto_seleccionado['ventas_mes_real']],
             mode='markers+text',
-            marker=dict(size=25, color='red', symbol='star', line=dict(width=2, color='white')),
-            text=['TÚ'], textposition='top center',
-            textfont=dict(size=14, color='red', family='Arial Black'),
+            marker=dict(size=16, color='#c9933a', symbol='diamond', line=dict(width=2, color='#e8e6e1')),
+            text=['TU PRODUCTO'], textposition='top center',
+            textfont=dict(size=11, color='#c9933a', family='DM Mono', weight='bold'),
             hovertemplate=f'<b>TU PRODUCTO</b><br>Precio: {producto_seleccionado["precio_real"]:.2f}€<br>Ventas: {int(producto_seleccionado["ventas_mes_real"])}<extra></extra>',
             name='Tu Producto', showlegend=True
         ))
 
         fig1.update_layout(
-            title=f"Mapa de Posicionamiento: {producto_seleccionado['subtype']}",
+            title=None, # <--- Eliminamos el título generado por Plotly
             xaxis_title="Precio (€)",
             yaxis_title="Ventas último mes",
             height=600,
@@ -1251,17 +1281,15 @@ if st.session_state.producto_seleccionado_idx is not None:
             st.metric("Percentil de ventas", f"{percentil_ventas:.0f}%",
                       help="% de productos que venden menos que tú")
         
-        st.markdown("---")
         
                
         # ========== GRÁFICO ADICIONAL: DISTRIBUCIÓN POR CATEGORÍA ==========
-        st.markdown("### Análisis por Categoría y Subtipo")
+        st.markdown('<div class="section-label" style="color: #ffffff; font-size: 0.85rem; margin-top: 2.5rem;">Análisis por Categoría y Subtipo</div>', unsafe_allow_html=True)
         
         # Tabs para diferentes vistas
         analisis_tabs = st.tabs(["Por Categoría", "Por Subtipo", "Productos Patrocinados"])
         
         with analisis_tabs[0]:
-            st.markdown("#### Precios Promedio por Categoría")
             
             # Agrupar por categoría
             categoria_stats = df.groupby('category').agg({
@@ -1275,7 +1303,7 @@ if st.session_state.producto_seleccionado_idx is not None:
                 categoria_stats,
                 x='category',
                 y='precio_real',
-                title='Precio Promedio por Categoría',
+                title='Promedio de precios por Categoría',
                 labels={'precio_real': 'Precio Promedio (€)', 'category': 'Categoría'},
                 color='precio_real',
                 color_continuous_scale='Viridis',
@@ -1299,7 +1327,6 @@ if st.session_state.producto_seleccionado_idx is not None:
             st.plotly_chart(fig_cat, use_container_width=True)
         
         with analisis_tabs[1]:
-            st.markdown("#### Precios Promedio por Subtipo en tu Categoría")
             
             # Filtrar por categoría y agrupar por subtipo
             subtipo_stats = df_categoria.groupby('subtype').agg({
@@ -1337,7 +1364,6 @@ if st.session_state.producto_seleccionado_idx is not None:
             st.plotly_chart(fig_sub, use_container_width=True)
         
         with analisis_tabs[2]:
-            st.markdown("#### Análisis de Productos Patrocinados en tu Categoría")
             
             # Comparar patrocinados vs no patrocinados
             sponsored_stats = df_categoria.groupby('is_sponsored').agg({
@@ -1415,10 +1441,9 @@ if st.session_state.producto_seleccionado_idx is not None:
                 else:
                     st.success("Bajo nivel de publicidad en tu categoría. Puedes competir orgánicamente.")
         
-        st.markdown("---")
-        
         # ========== SECCIÓN 2: TUS COMPETIDORES MÁS CERCANOS ==========
-        st.markdown('<span class="section-heading-num">02</span><div class="section-heading">Competidores Más Cercanos</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-label" style="color: #ffffff; font-size: 0.85rem; margin-top: 2.5rem;">Competidores Más Cercanos</div>', unsafe_allow_html=True)
+        st.markdown('<p style="font-size:0.8rem;color:#8b9099;margin-bottom:1.5rem;">Los rivales directos detectados por nuestra IA según similitud de producto y rango de precio.</p>', unsafe_allow_html=True)
         
         # --- NUEVA LÓGICA DE COMPETIDORES: KNN (IA) ---
         vectorizer, knn_model, df_knn = get_knn_engine(df)
@@ -1433,7 +1458,7 @@ if st.session_state.producto_seleccionado_idx is not None:
         
         indices_validos = []
         for d, idx in zip(distancias[0], indices[0]):
-            if d < 0.70: # Filtro de similitud textual
+            if d < 0.50: # Filtro de similitud textual
                 row_vecino = df_knn.iloc[idx]
                 if rango_min <= row_vecino['precio_real'] <= rango_max:
                     indices_validos.append(idx)
@@ -1517,6 +1542,7 @@ if st.session_state.producto_seleccionado_idx is not None:
         st.markdown(html_completo, unsafe_allow_html=True)
         
         # Insights de competidores
+        st.markdown("\n")
         st.markdown("#### Insights Clave")
         
         insight_comp_cols = st.columns(4)
@@ -1560,8 +1586,6 @@ if st.session_state.producto_seleccionado_idx is not None:
                 f"{num_premium}/{len(competidores_directos)}",
                 delta=f"{pct_premium:.0f}%"
             )
-        
-        st.markdown("---")
         
         # ========== SECCIÓN 3: ¿QUÉ HACE LA DIFERENCIA? ==========
         st.markdown('<span class="section-heading-num">03</span><div class="section-heading">¿Qué Hace la Diferencia?</div>', unsafe_allow_html=True)
@@ -1858,191 +1882,190 @@ if st.session_state.producto_seleccionado_idx is not None:
         st.markdown('<span class="section-heading-num">04</span><div class="section-heading">Diagnóstico de Salud</div>', unsafe_allow_html=True)
         st.caption("¿Cómo está mi producto?")
         
-        # Calcular scores individuales
-        # Score 1: Precio (percentil de precio competitivo)
-        banda_precio = df_subtipo[
-            (df_subtipo['precio_real'] >= producto_seleccionado['precio_real'] * 0.85) &
-            (df_subtipo['precio_real'] <= producto_seleccionado['precio_real'] * 1.15)
-        ]
+        # 1. OBTENER RIVALES DIRECTOS (KNN) para un análisis hiper-segmentado
+        vectorizer, knn_model, df_knn = get_knn_engine(df)
+        titulo_actual = str(producto_seleccionado['original_title'])
+        vec_entrada = vectorizer.transform([titulo_actual])
+        distancias, indices = knn_model.kneighbors(vec_entrada)
+        
+        rango_min_sec4 = producto_seleccionado['precio_real'] * 0.60
+        rango_max_sec4 = producto_seleccionado['precio_real'] * 1.40
+        
+        indices_validos_sec4 = []
+        for d, idx in zip(distancias[0], indices[0]):
+            if d < 0.50: # Similitud textual
+                row_vecino = df_knn.iloc[idx]
+                if rango_min_sec4 <= row_vecino['precio_real'] <= rango_max_sec4:
+                    indices_validos_sec4.append(idx)
+                    
+        df_rivales = df_knn.iloc[indices_validos_sec4].copy()
 
+        # Fallback: Si el nicho es muy muy pequeño, usamos el subtipo cercano en precio
+        if len(df_rivales) < 4:
+            df_rivales = df[(df['subtype'] == producto_seleccionado['subtype']) & 
+                            (df['precio_real'] >= rango_min_sec4) & 
+                            (df['precio_real'] <= rango_max_sec4)].copy()
+            
+        # Si aún así falla (caso extremo), usamos el subtipo entero
+        if len(df_rivales) < 4:
+            df_rivales = df[df['subtype'] == producto_seleccionado['subtype']].copy()
 
-        if len(banda_precio) >= 3:
-            base = banda_precio
-        else:
-            n = max(10, int(len(df_subtipo) * 0.15))
-            base = (
-                df_subtipo.assign(
-                    diff=(df_subtipo["precio_real"] - producto_seleccionado["precio_real"]).abs()
-                )
-                .nsmallest(n, "diff")
-            )
+        # 2. Cálculos Base y Medianas sobre los RIVALES DIRECTOS
+        mediana_precio = df_rivales['precio_real'].median()
+        mediana_ventas = df_rivales['ventas_mes_real'].median()
+        mediana_reviews = df_rivales['reviews_real'].median()
+        mediana_rating = df_rivales['product_rating'].median()
+        
+        # 3. Calcular scores (0-100) en percentiles para el Radar vs RIVALES
+        # Score Precio (usando tu rango competitivo)
+        base = df_rivales.assign(diff=(df_rivales["precio_real"] - producto_seleccionado["precio_real"]).abs()).nsmallest(max(5, int(len(df_rivales)*0.3)), "diff")
+        score_precio = float(np.clip((base["ventas_mes_real"] <= producto_seleccionado["ventas_mes_real"]).mean() * 100, 0, 100))
 
-
-        score_precio = float((base["ventas_mes_real"] <= producto_seleccionado["ventas_mes_real"]).mean() * 100)
-        score_precio = float(np.clip(score_precio, 0, 100))
-        score_precio = float((base["ventas_mes_real"] <= producto_seleccionado["ventas_mes_real"]).mean() * 100)
-        score_precio = float(np.clip(score_precio, 0, 100))
-
-
-        # Añadir la siguiente línea solo en la SECCIÓN 4
-        pct_precio = float((df_subtipo["precio_real"] <= producto_seleccionado["precio_real"]).mean() * 100)
-
-
-        # Score 2: Calidad — rating bayesiano
-        # m= mediana siendo 20 el mínimo y 200 el máximo de reseñas
-        m_raw = float(df_subtipo['reviews_real'].median())
+        # Score Calidad (Rating Bayesiano ajustado al nicho)
+        m_raw = float(mediana_reviews)
         m = float(np.clip(m_raw, 20, 200))
-        C = float(df_subtipo['product_rating'].mean())          # media del subtipo (prior)
+        C = float(df_rivales['product_rating'].mean())
         r = float(producto_seleccionado['product_rating'])
         v = float(producto_seleccionado['reviews_real'])
-        bayes_rating  = (v / (v + m)) * r + (m / (v + m)) * C  # rating ajustado
-        score_calidad = float(np.clip((bayes_rating - 1) / 4 * 100, 0, 100))  # escala 1-5 → 0-100
+        bayes_rating  = (v / (v + m)) * r + (m / (v + m)) * C
+        score_calidad = float(np.clip((bayes_rating - 1) / 4 * 100, 0, 100))
 
-
-        # Score 3: Popularidad — percentil en log(ventas)
-        ventas_log    = np.log1p(df_subtipo['ventas_mes_real'].clip(lower=0))
+        # Score Popularidad (Ventas vs Rivales)
+        ventas_log = np.log1p(df_rivales['ventas_mes_real'].clip(lower=0))
         ventas_log_ps = np.log1p(max(0.0, float(producto_seleccionado['ventas_mes_real'])))
         score_popularidad = float((ventas_log <= ventas_log_ps).mean() * 100)
         
-        # Crear gauges
+        # Score Autoridad (Reviews vs Rivales)
+        reviews_log = np.log1p(df_rivales['reviews_real'].clip(lower=0))
+        reviews_log_ps = np.log1p(max(0.0, float(producto_seleccionado['reviews_real'])))
+        score_reviews = float((reviews_log <= reviews_log_ps).mean() * 100)
 
-        gauge_cols = st.columns(3)
+        # 4. Layout: Radar a la izquierda, Gaps a la derecha
+        radar_col, gap_col = st.columns([1.2, 1])
+        
+        with radar_col:
+            categories = ['Eficacia<br>Precio', 'Calidad<br>(Rating)', 'Autoridad<br>(Reviews)', 'Volumen<br>Ventas']
+            categories_plot = categories + [categories[0]]
+            
+            val_prod = [score_precio, score_calidad, score_reviews, score_popularidad]
+            val_prod_plot = val_prod + [val_prod[0]]
+            val_mediana = [50, 50, 50, 50] 
+            val_mediana_plot = val_mediana + [val_mediana[0]]
+            val_lideres = [90, 90, 90, 90] 
+            val_lideres_plot = val_lideres + [val_lideres[0]]
 
-        def crear_gauge(valor, titulo):
-            """Crea un gauge chart"""
-            if valor >= 70:
-                color = "#2ea84c"
-                estado = "BUENA"
-            elif valor >= 40:
-                color = "#d29922"
-                estado = "MEDIA"
-            else:
-                color = "#e5534b"
-                estado = "BAJA"
+            fig_radar = go.Figure()
 
-            fig = go.Figure(go.Indicator(
-                mode="gauge+number",
-                value=float(valor),
-                title={'text': titulo, 'font': {'size': 13, 'color': '#8b9099', 'family': 'DM Sans'}},
-                number={'font': {'color': color, 'family': 'DM Mono', 'size': 32}},
-                gauge={
-                    'axis': {'range': [0, 100], 'tickcolor': '#4a5260', 'tickfont': {'color': '#4a5260', 'size': 10}},
-                    'bar': {'color': color},
-                    'bgcolor': '#111418',
-                    'bordercolor': '#21262d',
-                    'steps': [
-                        {'range': [0, 40],  'color': 'rgba(229,83,75,0.08)'},
-                        {'range': [40, 70], 'color': 'rgba(210,153,34,0.08)'},
-                        {'range': [70, 100],'color': 'rgba(46,168,76,0.08)'}
-                    ],
-                    'threshold': {
-                        'line': {'color': color, 'width': 2},
-                        'thickness': 0.75,
-                        'value': float(valor)
-                    }
-                }
+            # Área Top 10% de tu nicho
+            fig_radar.add_trace(go.Scatterpolar(
+                r=val_lideres_plot, theta=categories_plot, fill='toself',
+                fillcolor='rgba(56,139,253,0.08)', line=dict(color='rgba(56,139,253,0.5)', width=1, dash='dot'),
+                name='Líderes de tu Nicho', hoverinfo='skip'
             ))
 
-            fig.update_layout(
-                height=220,
-                margin=dict(l=20, r=20, t=50, b=10),
+            # Área Tu Producto
+            fig_radar.add_trace(go.Scatterpolar(
+                r=val_prod_plot, theta=categories_plot, fill='toself',
+                fillcolor='rgba(201,147,58,0.25)', line=dict(color='#c9933a', width=2.5),
+                name='Tu Producto', hovertemplate='<b>%{theta}</b><br>Score: %{r:.0f}/100<extra></extra>'
+            ))
+
+            # Línea Mediana de los rivales
+            fig_radar.add_trace(go.Scatterpolar(
+                r=val_mediana_plot, theta=categories_plot, fill='none',
+                line=dict(color='#8b9099', width=2),
+                name='Mediana Competidores', hoverinfo='skip'
+            ))
+
+            fig_radar.update_layout(
+                polar=dict(
+                    radialaxis=dict(visible=True, range=[0, 100], gridcolor='#21262d', tickfont=dict(color='#4a5260', size=9)),
+                    angularaxis=dict(gridcolor='#21262d', tickfont=dict(color='#e8e6e1', size=11, family='DM Sans'))
+                ),
                 paper_bgcolor='rgba(0,0,0,0)',
                 plot_bgcolor='rgba(0,0,0,0)',
-                font=dict(color='#8b9099')
+                showlegend=True,
+                legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5, font=dict(color='#8b9099')),
+                height=450,
+                margin=dict(l=40, r=40, t=70, b=20)
             )
+            st.plotly_chart(fig_radar, use_container_width=True)
 
-            return fig, estado
-
-        
-        with gauge_cols[0]:
-            fig_precio, estado_precio = crear_gauge(score_precio, "PRECIO")
-            st.plotly_chart(fig_precio, use_container_width=True)
-            st.markdown(f"<p style='text-align: center; font-weight: bold;'>{estado_precio}</p>", unsafe_allow_html=True)
-        
-        with gauge_cols[1]:
-            fig_calidad, estado_calidad = crear_gauge(score_calidad, "CALIDAD")
-            st.plotly_chart(fig_calidad, use_container_width=True)
-            st.markdown(f"<p style='text-align: center; font-weight: bold;'>{estado_calidad}</p>", unsafe_allow_html=True)
-        
-        with gauge_cols[2]:
-            fig_popularidad, estado_popularidad = crear_gauge(score_popularidad, "POPULARIDAD")
-            st.plotly_chart(fig_popularidad, use_container_width=True)
-            st.markdown(f"<p style='text-align: center; font-weight: bold;'>{estado_popularidad}</p>", unsafe_allow_html=True)
-        
-        # Score general
-        score_general = 0.6 * ((score_precio + score_calidad + score_popularidad) / 3) \
-                    + 0.4 * min(score_precio, score_calidad, score_popularidad)
-        score_general = float(np.clip(score_general, 0, 100))
-        
-        st.markdown("---")
-        
-        # Semáforo general
-        if min(score_precio, score_calidad, score_popularidad) >= 70:
-            color_gen_hex = "#2ea84c"; estado_general = "EXCELENTE"
-        elif score_general >= 55 and min(score_precio, score_calidad, score_popularidad) >= 40:
-            color_gen_hex = "#d29922"; estado_general = "BUENA"
-        else:
-            color_gen_hex = "#e5534b"; estado_general = "NECESITA ATENCIÓN"
-        
-        st.markdown(f"""
-            <div class="health-panel" style="border-color:{color_gen_hex}33;">
-                <div class="health-label" style="color:{color_gen_hex};">SALUD GENERAL</div>
-                <div class="health-score" style="color:{color_gen_hex};">{score_general:.0f}</div>
-                <div style="font-family:'DM Mono',monospace;font-size:0.7rem;color:#4a5260;margin-top:0.25rem;">/100 &nbsp;·&nbsp; {estado_general}</div>
+        with gap_col:
+            st.markdown('<div style="margin-top:1rem;"></div>', unsafe_allow_html=True)
+            
+            # --- GAP VENTAS ---
+            gap_ventas = producto_seleccionado['ventas_mes_real'] - mediana_ventas
+            color_ventas = "var(--success)" if gap_ventas > 0 else "var(--danger)"
+            txt_ventas = "por encima" if gap_ventas > 0 else "por debajo"
+            
+            st.markdown(f"""
+            <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:1.2rem; margin-bottom:0.8rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div style="font-family:var(--font-body); font-size:0.75rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.1em;">Brecha de Ventas</div>
+                    <div style="font-family:var(--font-mono); font-size:1.1rem; color:{color_ventas}; font-weight:600;">{gap_ventas:+.0f} uds</div>
+                </div>
+                <div style="font-size:0.85rem; color:var(--text-secondary); margin-top:0.4rem; line-height:1.4;">
+                    Vendes <b>{abs(gap_ventas):.0f} unidades {txt_ventas}</b> de la mediana de tus competidores más directos ({mediana_ventas:.0f} uds/mes).
+                </div>
             </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        
-        # Resumen de fortalezas y áreas de mejora
-        fortaleza_mejora_cols = st.columns(2)
-        
-        with fortaleza_mejora_cols[0]:
-            st.markdown('<p style="font-size:0.65rem;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:#4a5260;">Fortalezas</p>', unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
+
+            # --- GAP REVIEWS ---
+            gap_reviews = producto_seleccionado['reviews_real'] - mediana_reviews
+            color_reviews = "var(--success)" if gap_reviews > 0 else "var(--warning)"
+            txt_reviews = "superas" if gap_reviews > 0 else "te faltan"
             
-            if score_precio >= 70:
-                st.success(f"Precio competitivo (Score: {score_precio:.0f})")
-            if score_calidad >= 70:
-                st.success(f"Buena calidad percibida (Score: {score_calidad:.0f})")
-            if score_popularidad >= 70:
-                st.success(f"Ventas sólidas (Score: {score_popularidad:.0f})")
+            st.markdown(f"""
+            <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:1.2rem; margin-bottom:0.8rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div style="font-family:var(--font-body); font-size:0.75rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.1em;">Brecha de Autoridad</div>
+                    <div style="font-family:var(--font-mono); font-size:1.1rem; color:{color_reviews}; font-weight:600;">{gap_reviews:+.0f} rev</div>
+                </div>
+                <div style="font-size:0.85rem; color:var(--text-secondary); margin-top:0.4rem; line-height:1.4;">
+                    En base a las reviews, <b>{txt_reviews} {abs(gap_reviews):.0f} valoraciones</b> para igualar el estándar de los rivales de tu nicho.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # --- GAP PRECIO ---
+            gap_precio = producto_seleccionado['precio_real'] - mediana_precio
+            color_precio = "var(--info)" if abs(gap_precio) < (mediana_precio*0.1) else ("var(--warning)" if gap_precio > 0 else "var(--success)")
+            txt_precio = "más caro" if gap_precio > 0 else "más barato"
             
-            if score_precio < 70 and score_calidad < 70 and score_popularidad < 70:
-                st.info("Hay oportunidades de mejora en todas las áreas")
-        
-        with fortaleza_mejora_cols[1]:
-            st.markdown('<p style="font-size:0.65rem;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:#4a5260;">Áreas de Mejora</p>', unsafe_allow_html=True)
-            
-            if score_precio < 70:
-                if pct_precio> 75:
-                    st.warning(f"💰 Precio alto vs competencia (Percentil: {pct_precio:.0f})")
-                else:
-                    st.warning(f"Revisa tu estrategia de precio (Score: {score_precio:.0f})")
-            
-            if score_calidad < 70:
-                if producto_seleccionado['product_rating'] < df_subtipo['product_rating'].mean():
-                    st.warning(f"Rating por debajo del promedio ({producto_seleccionado['product_rating']:.1f} vs {df_subtipo['product_rating'].mean():.1f})")
-                if producto_seleccionado['reviews_real'] < df_subtipo['reviews_real'].mean():
-                    st.warning(f"Pocas reviews ({int(producto_seleccionado['reviews_real'])} vs promedio: {int(df_subtipo['reviews_real'].mean())})")
-            
-            if score_popularidad < 70:
-                st.warning(f"📊 Ventas por debajo del promedio (Percentil: {score_popularidad:.0f})")
-            
-            if score_precio >= 70 and score_calidad >= 70 and score_popularidad >= 70:
-                st.success("Todo en orden. Sigue así.")
+            st.markdown(f"""
+            <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:6px; padding:1.2rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div style="font-family:var(--font-body); font-size:0.75rem; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.1em;">Brecha de Precio</div>
+                    <div style="font-family:var(--font-mono); font-size:1.1rem; color:{color_precio}; font-weight:600;">{gap_precio:+.2f} €</div>
+                </div>
+                <div style="font-size:0.85rem; color:var(--text-secondary); margin-top:0.4rem; line-height:1.4;">
+                    Tu producto es <b>{abs(gap_precio):.2f}€ {txt_precio}</b> que la mediana de tus rivales. Revisa si tu calidad lo justifica.
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
     
     # ==================== TAB 3: OPTIMIZAR PRECIO ====================
     elif st.session_state.selected_tab == 'optimizar':
-        st.markdown('<div class="section-label">Optimizar Precio con IA</div>', unsafe_allow_html=True)
-        st.markdown('<p style="font-size:0.8rem;color:#8b9099;margin-bottom:2rem;">Predicción de precio óptimo basada en condiciones de mercado</p>', unsafe_allow_html=True)
+        st.markdown('''
+            <div style="margin-top:1.5rem; margin-bottom:2.5rem;">
+                <span style="font-family:var(--font-mono); font-size:0.85rem; color:var(--gold); letter-spacing:0.15em; text-transform:uppercase;">
+                    Inteligencia Artificial
+                </span>
+                <h2 style="font-family:var(--font-display); font-size:2.6rem; font-weight:300; color:#ffffff; margin:0.3rem 0;">
+                    Optimizar Precio con <span style="color:var(--gold); font-weight:300;">IA</span>
+                </h2>
+                <p style="color:#8b9099; font-size:0.95rem; margin-top:0.4rem;">
+                    Calcula el precio óptimo para maximizar ingresos y descubre estrategias para mejorar tu posicionamiento.
+                </p>
+            </div>
+        ''', unsafe_allow_html=True)
 
         col_button = st.columns([1, 2, 1])
         with col_button[1]:
             analizar = st.button("ANALIZAR PRECIO ÓPTIMO CON IA", use_container_width=True, type="primary", key="analyze_button")
 
         if analizar:
-            st.markdown("---")
-            st.markdown("## Análisis de Precio Óptimo")
 
             COLS_EXCLUIR = {
                 'product_image_url', # URL, no es feature del modelo
@@ -2070,7 +2093,7 @@ if st.session_state.producto_seleccionado_idx is not None:
                         data_api = response.json()
                         precio_predicho = data_api['predicted_price']
 
-                        st.markdown('<div class="section-label">Resultado del Análisis</div>', unsafe_allow_html=True)
+                        st.markdown('<div class="section-label" style="color: #ffffff; font-size: 0.85rem;">Resultado del Análisis</div>', unsafe_allow_html=True)
                         result_cols = st.columns([1, 0.3, 1, 1])
                         with result_cols[0]:
                             st.markdown(f'<div class="result-box"><div class="result-box-label">Precio Actual</div><div class="result-box-value">{producto_seleccionado["precio_real"]:.2f} €</div></div>', unsafe_allow_html=True)
@@ -2087,7 +2110,7 @@ if st.session_state.producto_seleccionado_idx is not None:
 
                         # --- MOTOR DE CRECIMIENTO (GROWTH OPTIMIZATION) ---
                         st.markdown("<br>", unsafe_allow_html=True)
-                        st.markdown('<div class="section-label">Motor de Crecimiento (Revenue Optimization)</div>', unsafe_allow_html=True)
+                        st.markdown('<div class="section-label" style="color: #ffffff; font-size: 0.85rem;">Motor de Crecimiento (Revenue Optimization)</div>', unsafe_allow_html=True)
 
                         # 1. Crear el "Competitive Bucket" usando KNN (Similitud Textual)
                         vectorizer, knn_model, df_knn = get_knn_engine(df)
@@ -2154,8 +2177,8 @@ if st.session_state.producto_seleccionado_idx is not None:
                                         lift_pct = (m_con - m_sin) / m_sin
                                         motivo_estrategico = f"El <b style='color:#c9933a; font-size:1.1em;'>{penetracion:.0f}%</b> de tus rivales directos lo usan y venden más."
                                 
-                                # ESTRATEGIA B: Fallback a la Macro-Categoría
-                                if lift_pct == 0.0 and penetracion > 15:
+                                # ESTRATEGIA B: Fallback a la Macro-Categoría (RELAJADO)
+                                if lift_pct == 0.0 and penetracion > 5: # Antes era 15
                                     macro_con = df_subtipo_entero[df_subtipo_entero[col] == val_target]['ventas_mes_real']
                                     macro_sin = df_subtipo_entero[df_subtipo_entero[col] != val_target]['ventas_mes_real']
                                     if len(macro_con) > 3 and len(macro_sin) > 3:
@@ -2165,11 +2188,11 @@ if st.session_state.producto_seleccionado_idx is not None:
                                             lift_pct = min((m_macro_con - m_macro_sin) / m_macro_sin, 0.50)
                                             motivo_estrategico = f"Tendencia en tu categoría: venderás un <b style='color:#2ea84c; font-size:1.1em;'>+{lift_pct*100:.0f}%</b> más de media."
 
-                                # ESTRATEGIA C: Recomendación Defensiva (Estándar de mercado)
-                                if lift_pct == 0.0 and penetracion >= 45:
+                                # ESTRATEGIA C: Recomendación Defensiva (RELAJADO)
+                                if lift_pct == 0.0 and penetracion >= 25: # Antes era 45
                                     lift_pct = 0.08 
                                     motivo_estrategico = f"Estándar de mercado: el <b style='color:#c9933a; font-size:1.1em;'>{penetracion:.0f}%</b> ya lo tiene. Estás perdiendo visibilidad."
-
+                                    
                                 # Si hemos logrado obtener un impacto positivo, lo guardamos
                                 if lift_pct > 0:
                                     # Limitamos el optimismo extremo (nadie vende un +500% solo por un tag eco)
@@ -2200,7 +2223,7 @@ if st.session_state.producto_seleccionado_idx is not None:
                                 f"**{ingreso_base:,.0f}€** a **{nuevo_ingreso:,.0f}€** mensuales."
                             )
                             
-                            st.markdown(f"<p style='font-size:0.75rem; color:#8b9099;'>Análisis impulsado por KNN basado en competidores similares.</p>", unsafe_allow_html=True)
+                            st.markdown(f"<p style='font-size:0.85rem; color:#8b9099;'>Análisis impulsado por KNN basado en competidores similares.</p>", unsafe_allow_html=True)
                             
                             for rec in recomendaciones:
                                 # Colores exactos para la dificultad
@@ -2236,20 +2259,14 @@ if st.session_state.producto_seleccionado_idx is not None:
 
                         st.markdown("---")
                         
-                        # --- NUEVOS TÍTULOS GIGANTES Y EXPLICATIVOS ---
+                        # --- NUEVOS TÍTULOS Y EXPLICATIVOS ---
                         st.markdown(f'''
-                            <div style="margin-top:1.5rem; margin-bottom:2rem;">
-                                <span style="font-family:var(--font-mono); font-size:0.85rem; color:var(--gold); letter-spacing:0.15em; text-transform:uppercase;">
-                                    Simulación Estratégica
-                                </span>
-                                <h2 style="font-family:var(--font-display); font-size:2.6rem; font-weight:300; color:#ffffff; margin:0.3rem 0;">
-                                    Tu Posicionamiento a <span style="color:var(--gold); font-weight:600;">{precio_predicho:.2f} €</span>
-                                </h2>
-                                <p style="color:#b3b8c2; font-size:1.05rem; margin-top:0.4rem; line-height:1.5;">
-                                    Descubre cómo cambia tu mapa de batalla si adoptas el precio sugerido. 
-                                    A partir de aquí, <b>comparamos a tus rivales directamente contra tu nuevo Objetivo IA</b>.
-                                </p>
+                            <div class="section-label" style="color: #ffffff; font-size: 0.85rem; margin-top: 2.5rem;">
+                                Simulación Estratégica: Tu Posicionamiento a {precio_predicho:.2f} €
                             </div>
+                            <p style="font-size:0.8rem;color:#8b9099;margin-bottom:1.5rem;">
+                                Descubre cómo cambia tu mapa de batalla si adoptas el precio sugerido. A partir de aquí, <b>comparamos a tus rivales directamente contra tu nuevo Objetivo IA</b>.
+                            </p>
                         ''', unsafe_allow_html=True)
 
                         tab1, tab2 = st.tabs(["Productos Similares (Precio)", "Posicionamiento de Mercado"])
@@ -2266,6 +2283,13 @@ if st.session_state.producto_seleccionado_idx is not None:
                             # Escala de burbujas
                             max_rev = df_plot['reviews_real'].max() if len(df_plot) > 0 and df_plot['reviews_real'].max() > 0 else 1
                             df_plot['bubble_size'] = 8 + np.sqrt(df_plot['reviews_real'] / max_rev) * 45
+
+                            # --- Título estandarizado ---
+                            st.markdown(f'''
+                                <div class="section-label" style="color: #ffffff; font-size: 0.85rem; margin-top: 1.5rem; margin-bottom: 1rem;">
+                                    Mapa de Batalla: {len(df_plot)} Rivales (KNN)
+                                </div>
+                            ''', unsafe_allow_html=True)
 
                             fig = go.Figure()
 
@@ -2306,25 +2330,24 @@ if st.session_state.producto_seleccionado_idx is not None:
 
                             fig.update_layout(**PLOTLY_DARK)
                             fig.update_layout(
-                                title=dict(text=f"Mapa de Batalla: {len(df_plot)} Rivales encontrados por IA (KNN)", font=dict(color='#e8e6e1', size=16, family='Cormorant Garamond')),
+                                title=dict(text=""), 
                                 xaxis_title="Precio (€)", yaxis_title="Ventas último mes", height=550, showlegend=True,
                                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='rgba(17,20,24,0.8)'),
-                                hoverlabel=dict(bgcolor="#161b22", bordercolor="#21262d", font_size=13, font_family="DM Sans")
+                                hoverlabel=dict(bgcolor="#161b22", bordercolor="#21262d", font_size=13, font_family="DM Sans"),
+                                margin=dict(t=30) # Reducimos margen superior
                             )
-                            fig.add_annotation(text="* El tamaño de la burbuja representa el volumen de Reviews", xref="paper", yref="paper", x=0, y=-0.12, showarrow=False, font=dict(color="#4a5260", size=11, family="DM Sans"))
+                            # Cambiamos el color de la fuente a blanco (#ffffff)
+                            fig.add_annotation(text="* El tamaño de la burbuja representa el volumen de Reviews", xref="paper", yref="paper", x=0, y=-0.12, showarrow=False, font=dict(color="#ffffff", size=11, family="DM Sans"))
                             st.plotly_chart(fig, use_container_width=True)
 
-                            # --- TITULAR GIGANTE PARA LA TABLA ---
+                            # --- TITULAR PARA LA TABLA ---
                             st.markdown(f'''
-                                <div style="margin-top:3.5rem; margin-bottom:1.5rem;">
-                                    <h3 style="font-family:var(--font-display); font-size:1.8rem; font-weight:400; color:#ffffff; margin:0;">
-                                        Radiografía de Competidores Directos
-                                    </h3>
-                                    <p style="color:#8b9099; font-size:0.95rem; margin-top:0.4rem;">
-                                        La columna <b>"Diff. Precio"</b> compara a tus rivales contra tu nuevo <b>Precio Sugerido ({precio_predicho:.2f} €)</b>. 
-                                        <span style="color:#2ea84c; font-weight:600;">
-                                    </p>
+                                <div class="section-label" style="color: #ffffff; font-size: 0.85rem; margin-top: 2.5rem;">
+                                    Radiografía de Competidores Directos
                                 </div>
+                                <p style="font-size:0.8rem;color:#8b9099;margin-bottom:1.5rem;">
+                                    La columna <b>"Diff. Precio"</b> compara a tus rivales contra tu nuevo <b>Precio Sugerido ({precio_predicho:.2f} €)</b>.
+                                </p>
                             ''', unsafe_allow_html=True)
 
                             # --- TABLA HTML ---
@@ -2406,14 +2429,12 @@ if st.session_state.producto_seleccionado_idx is not None:
                             df_plot_t2['short_title'] = df_plot_t2['original_title'].apply(lambda x: str(x)[:55] + '...' if len(str(x)) > 55 else str(x))
                             
                             st.markdown(f'''
-                                <div style="margin-top:0.5rem; margin-bottom:1.5rem;">
-                                    <h3 style="font-family:var(--font-display); font-size:1.6rem; font-weight:400; color:#ffffff; margin:0;">
-                                        Relación Precio vs Calidad (Rating)
-                                    </h3>
-                                    <p style="color:#8b9099; font-size:0.95rem; margin-top:0.4rem;">
-                                        Descubre si tu nuevo <b>Objetivo IA</b> te sitúa como una opción "Low Cost", "Premium" o "Calidad-Precio" frente a tus verdaderos rivales.
-                                    </p>
+                                <div class="section-label" style="color: #ffffff; font-size: 0.85rem; margin-top: 1.5rem;">
+                                    Relación Precio vs Calidad (Rating)
                                 </div>
+                                <p style="font-size:0.8rem;color:#8b9099;margin-bottom:1.5rem;">
+                                    Descubre si tu nuevo <b>Objetivo IA</b> te sitúa como una opción "Low Cost", "Premium" o "Calidad-Precio" frente a tus verdaderos rivales.
+                                </p>
                             ''', unsafe_allow_html=True)
 
                             # 2. Configurar la Gráfica de Cuadrantes
@@ -2484,11 +2505,11 @@ if st.session_state.producto_seleccionado_idx is not None:
                                 margin=dict(t=30) # Reducimos el margen superior para que quede más compacto
                             )
                             
-                            # Añadimos la leyenda del tamaño de la burbuja en la esquina inferior izquierda
+                            # Añadimos la leyenda del tamaño de la burbuja en color blanco (#ffffff)
                             fig2.add_annotation(
                                 text="* El tamaño de la burbuja representa el volumen de Ventas Mensuales",
                                 xref="paper", yref="paper", x=0, y=-0.14, showarrow=False,
-                                font=dict(color="#4a5260", size=11, family="DM Sans")
+                                font=dict(color="#ffffff", size=11, family="DM Sans")
                             )
 
                             st.plotly_chart(fig2, use_container_width=True)
