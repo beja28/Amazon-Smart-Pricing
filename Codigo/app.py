@@ -591,23 +591,20 @@ def get_knn_engine(df_market):
     return vectorizer, knn, df_valid
 
 def get_sample_products(n_products=5):
-    """Selecciona 5 productos aleatorios de 5 categorías distintas del CSV de test"""
+    """Selecciona hasta n productos aleatorios del CSV de test"""
     df_test = load_test_samples()
     if df_test is None or len(df_test) == 0:
         return []
 
-    categorias = df_test['category'].unique()
-    if len(categorias) < n_products:
-        n_products = len(categorias)
+    # Nos aseguramos de no pedir más productos de los que hay en el CSV
+    n = min(n_products, len(df_test))
 
-    categorias_seleccionadas = np.random.choice(categorias, size=n_products, replace=False)
+    # Seleccionamos los productos (aleatoriamente para que varíe el orden)
+    productos_seleccionados = df_test.sample(n=n, replace=False)
 
     productos_muestra = []
-    for categoria in categorias_seleccionadas:
-        productos_categoria = df_test[df_test['category'] == categoria]
-        if len(productos_categoria) > 0:
-            producto = productos_categoria.sample(n=1).iloc[0]
-            productos_muestra.append(producto)
+    for _, producto in productos_seleccionados.iterrows():
+        productos_muestra.append(producto)
 
     return productos_muestra
 
@@ -1433,7 +1430,7 @@ if st.session_state.producto_seleccionado_idx is not None:
         
         indices_validos = []
         for d, idx in zip(distancias[0], indices[0]):
-            if d < 0.70: # Filtro de similitud textual
+            if d < 0.50: # Filtro de similitud textual
                 row_vecino = df_knn.iloc[idx]
                 if rango_min <= row_vecino['precio_real'] <= rango_max:
                     indices_validos.append(idx)
@@ -1991,8 +1988,8 @@ if st.session_state.producto_seleccionado_idx is not None:
                                         lift_pct = (m_con - m_sin) / m_sin
                                         motivo_estrategico = f"El <b style='color:#c9933a; font-size:1.1em;'>{penetracion:.0f}%</b> de tus rivales directos lo usan y venden más."
                                 
-                                # ESTRATEGIA B: Fallback a la Macro-Categoría
-                                if lift_pct == 0.0 and penetracion > 15:
+                                # ESTRATEGIA B: Fallback a la Macro-Categoría (RELAJADO)
+                                if lift_pct == 0.0 and penetracion > 5: # Antes era 15
                                     macro_con = df_subtipo_entero[df_subtipo_entero[col] == val_target]['ventas_mes_real']
                                     macro_sin = df_subtipo_entero[df_subtipo_entero[col] != val_target]['ventas_mes_real']
                                     if len(macro_con) > 3 and len(macro_sin) > 3:
@@ -2002,11 +1999,11 @@ if st.session_state.producto_seleccionado_idx is not None:
                                             lift_pct = min((m_macro_con - m_macro_sin) / m_macro_sin, 0.50)
                                             motivo_estrategico = f"Tendencia en tu categoría: venderás un <b style='color:#2ea84c; font-size:1.1em;'>+{lift_pct*100:.0f}%</b> más de media."
 
-                                # ESTRATEGIA C: Recomendación Defensiva (Estándar de mercado)
-                                if lift_pct == 0.0 and penetracion >= 45:
+                                # ESTRATEGIA C: Recomendación Defensiva (RELAJADO)
+                                if lift_pct == 0.0 and penetracion >= 25: # Antes era 45
                                     lift_pct = 0.08 
                                     motivo_estrategico = f"Estándar de mercado: el <b style='color:#c9933a; font-size:1.1em;'>{penetracion:.0f}%</b> ya lo tiene. Estás perdiendo visibilidad."
-
+                                    
                                 # Si hemos logrado obtener un impacto positivo, lo guardamos
                                 if lift_pct > 0:
                                     # Limitamos el optimismo extremo (nadie vende un +500% solo por un tag eco)

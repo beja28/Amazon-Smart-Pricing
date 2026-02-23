@@ -6,6 +6,7 @@ import mlflow
 import warnings
 import pickle
 import os
+import matplotlib.pyplot as plt  # <--- AÑADIDO: Para dibujar la gráfica
 
 # Suprimir warnings
 warnings.filterwarnings('ignore')
@@ -35,17 +36,22 @@ def entrenar_modelo_general_produccion(df, best_params, best_iteration, target_c
     Entrena el modelo global con el 100% de los datos disponibles, 
     usando los parámetros predefinidos y la iteración óptima exacta.
     """
-    with mlflow.start_run(run_name="LGBM_General_100%_Produccion"):
+    import re # Asegúrate de que import re esté arriba del todo en tu archivo
+
+    with mlflow.start_run(run_name="LGBM_General_100%_Produccion_v4"):
         print("\n--- 1. PREPARACIÓN DE DATOS AL 100% ---")
         
         # 1. Limpieza de columnas
-        cols_a_eliminar = [target_col, 'image_url', 'product_url', 'original_title']
+        cols_a_eliminar = ['Unnamed_0', target_col, 'product_image_url', 'product_url', 'original_title']
         existing_cols = [c for c in cols_a_eliminar if c in df.columns]
         
         X = df.drop(columns=existing_cols)
         y = df[target_col]
 
-        # 2. Categorizar variables de texto (Exigencia de LightGBM)
+        # 1.5 LIMPIEZA DE NOMBRES PARA LIGHTGBM (Crítico)
+        X = X.rename(columns=lambda x: re.sub(r'[^A-Za-z0-9_]+', '_', str(x)))
+
+        # 2. Categorizar variables de texto
         cat_features = X.select_dtypes(include=['object', 'category']).columns.tolist()
         for col in cat_features:
             X[col] = X[col].astype('category')
@@ -59,24 +65,46 @@ def entrenar_modelo_general_produccion(df, best_params, best_iteration, target_c
             'random_state': 42
         })
 
-        # IMPORTANTE: n_estimators es igual al best_iteration (No hay early stopping)
+        # IMPORTANTE: n_estimators es igual al best_iteration
         model = lgb.LGBMRegressor(**params, n_estimators=best_iteration)
         
-        # 4. Entrenamiento Final (Sin set de validación)
+        # 4. Entrenamiento Final
         print(f"\n🚀 Entrenando modelo final de Producción ({len(X)} filas, {best_iteration} iteraciones)...")
         model.fit(X, y)
 
-        # 5. Loggear parámetros en MLflow (Omitimos métricas porque entrenamos con el 100%)
+        # --- NUEVO: GRÁFICA DE FEATURE IMPORTANCE PARA MLFLOW ---
+        print("📊 Generando gráfica de Feature Importance...")
+        importances = model.feature_importances_
+        features = model.feature_name_
+        
+        # Crear un dataframe y coger el top 20
+        df_imp = pd.DataFrame({'Feature': features, 'Importance': importances})
+        df_imp = df_imp.sort_values('Importance', ascending=False).head(10)
+        
+        fig, ax = plt.subplots(figsize=(10, 8))
+        # Invertimos el orden [::-1] para que la más importante quede arriba
+        ax.barh(df_imp['Feature'][::-1], df_imp['Importance'][::-1], color="#e9437a")
+        ax.set_title("Top 10 Feature Importance - LightGBM Global")
+        ax.set_xlabel("Importancia")
+        plt.tight_layout()
+        
+        # Subir la figura directamente a MLflow sin guardarla localmente
+        mlflow.log_figure(fig, "feature_importance_lightgbm.png")
+        plt.close(fig)
+        # --------------------------------------------------------
+
+        # 5. Loggear parámetros en MLflow
         mlflow.log_params(params)
         mlflow.log_param("final_n_estimators_used", best_iteration)
         mlflow.log_param("dataset_size", len(X))
 
-        # 6. Guardado del modelo
+        # 6. Guardado del modelo (CORREGIDO LA RUTA)
         nombre_archivo = 'modelo_general_lightgbm_produccion.pkl'
         
-        # Aseguramos que la carpeta existe (ajusta la ruta si lo necesitas)
-        os.makedirs("Modelos_produccion", exist_ok=True)
-        ruta_guardado = os.path.join("Modelos", nombre_archivo)
+        # Ahora creamos y guardamos en la MISMA carpeta
+        carpeta_destino = "Modelos_produccion"
+        os.makedirs(carpeta_destino, exist_ok=True)
+        ruta_guardado = os.path.join(carpeta_destino, nombre_archivo)
         
         with open(ruta_guardado, 'wb') as archivo:
              pickle.dump(model, archivo)
