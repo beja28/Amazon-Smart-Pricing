@@ -996,7 +996,7 @@ if st.session_state.producto_seleccionado_idx is not None:
             diff_reviews = producto_seleccionado['reviews_real'] - reviews_promedio
             st.metric(
                 "Reviews",
-                f"{int(producto_seleccionado['reviews_real'])}",
+                f"{int(producto_seleccionado['reviews_real'])}", 
                 delta=f"{int(diff_reviews):+} vs promedio"
             )
         
@@ -1565,9 +1565,8 @@ if st.session_state.producto_seleccionado_idx is not None:
         
         # ========== SECCIÓN 3: ¿QUÉ HACE LA DIFERENCIA? ==========
         st.markdown('<span class="section-heading-num">03</span><div class="section-heading">¿Qué Hace la Diferencia?</div>', unsafe_allow_html=True)
-        st.caption("¿Qué características importan en mi subtipo?")
+        st.caption("Impacto real de cada característica en tu categoría")
         
-        # Análisis de características
         caracteristicas_analisis = {
             'Best Seller': ('is_best_seller', 'Best Seller'),
             'Cupón': ('has_coupon', 1),
@@ -1576,119 +1575,283 @@ if st.session_state.producto_seleccionado_idx is not None:
             'Marca Premium': ('is_premium_brand', True),
             'Patrocinado': ('is_sponsored', 'Sponsored')
         }
-        
+
+        CAUSALIDAD_INVERSA = {'Cupón', 'Patrocinado'}
+
         datos_comparacion = []
-        
         for nombre_car, (columna, valor) in caracteristicas_analisis.items():
-            # Con característica
-            con_car = df_subtipo[df_subtipo[columna] == valor]
-            sin_car = df_subtipo[df_subtipo[columna] != valor]
-            
+            con_car = df_categoria[df_categoria[columna] == valor]
+            sin_car = df_categoria[df_categoria[columna] != valor]
             if len(con_car) > 0 and len(sin_car) > 0:
-                precio_con = con_car['precio_real'].mean()
-                precio_sin = sin_car['precio_real'].mean()
-                ventas_con = con_car['ventas_mes_real'].mean()
-                ventas_sin = sin_car['ventas_mes_real'].mean()
-                
-                # Determinar si el producto tiene esta característica
-                if columna == 'is_best_seller':
-                    tienes = producto_seleccionado[columna] == valor
-                elif columna == 'is_sponsored':
-                    tienes = producto_seleccionado[columna] == valor
-                elif columna == 'is_premium_brand':
-                    tienes = producto_seleccionado[columna] == valor
-                else:
-                    tienes = producto_seleccionado[columna] == valor
-                
+                tienes = producto_seleccionado[columna] == valor
+                diff_ventas = None if nombre_car in CAUSALIDAD_INVERSA else con_car['ventas_mes_real'].mean() - sin_car['ventas_mes_real'].mean()
                 datos_comparacion.append({
                     'Característica': nombre_car,
-                    'Precio CON': precio_con,
-                    'Precio SIN': precio_sin,
-                    'Ventas CON': ventas_con,
-                    'Ventas SIN': ventas_sin,
-                    'Diff Precio': precio_con - precio_sin,
-                    'Diff Ventas': ventas_con - ventas_sin,
+                    'Precio CON': con_car['precio_real'].mean(),
+                    'Precio SIN': sin_car['precio_real'].mean(),
+                    'Ventas CON': con_car['ventas_mes_real'].mean(),
+                    'Ventas SIN': sin_car['ventas_mes_real'].mean(),
+                    'Diff Precio': con_car['precio_real'].mean() - sin_car['precio_real'].mean(),
+                    'Diff Ventas': diff_ventas,
                     'Tienes': tienes
                 })
-        
-        # Gráfica de barras comparativas
+
+        # ── Diagnóstico Patrocinados ──
+        patrocinados    = df_categoria[df_categoria['is_sponsored'] == 'Sponsored']
+        no_patrocinados = df_categoria[df_categoria['is_sponsored'] != 'Sponsored']
+
+        rating_sp   = patrocinados['product_rating'].mean()
+        rating_org  = no_patrocinados['product_rating'].mean()
+        diff_rating = rating_sp - rating_org
+        signo_r     = '+' if diff_rating >= 0 else ''
+        color_r     = '#2ea84c' if diff_rating >= 0 else '#e5534b'
+
+        ventas_sp      = patrocinados['ventas_mes_real'].mean()
+        ventas_org     = no_patrocinados['ventas_mes_real'].mean()
+        diff_ventas_sp = ventas_sp - ventas_org
+        signo_v        = '+' if diff_ventas_sp >= 0 else ''
+        color_v        = '#2ea84c' if diff_ventas_sp >= 0 else '#e5534b'
+
+        n_sp  = len(patrocinados)
+        n_org = len(no_patrocinados)
+
+        # Mensaje de advertencia si hay gran desproporción
+        ratio_sp = n_sp / (n_sp + n_org) if (n_sp + n_org) > 0 else 0
+        if ratio_sp < 0.15:
+            aviso_sp = f"""
+            <div style="background:rgba(210,153,34,0.1); border:1px solid rgba(210,153,34,0.3);
+                        border-radius:6px; padding:0.8rem 1rem; margin-bottom:1rem;
+                        font-size:0.82rem; color:#d29922;">
+                ⚠️ Solo el <b>{ratio_sp*100:.1f}%</b> de los productos en tu categoría están patrocinados ({n_sp} de {n_sp+n_org}).
+                Con tan pocos patrocinados, sus ventas medias pueden no ser representativas
+                y es probable que aparezcan por debajo de los orgánicos por sesgo de selección.
+            </div>
+            """
+        elif ratio_sp > 0.60:
+            aviso_sp = f"""
+            <div style="background:rgba(210,153,34,0.1); border:1px solid rgba(210,153,34,0.3);
+                        border-radius:6px; padding:0.8rem 1rem; margin-bottom:1rem;
+                        font-size:0.82rem; color:#d29922;">
+                ⚠️ El <b>{ratio_sp*100:.1f}%</b> de los productos en tu categoría están patrocinados ({n_sp} de {n_sp+n_org}).
+                La mayoría de productos usan patrocinio, lo que puede distorsionar la comparación con orgánicos.
+            </div>
+            """
+        else:
+            aviso_sp = ""
+
+        st.markdown(f"""
+        <div style="margin-bottom:1rem;">
+            <span style='font-family:"DM Mono",monospace; font-size:0.65rem; letter-spacing:0.18em;
+                         text-transform:uppercase; color:#c9933a;'>¿Qué aporta realmente el patrocinio?</span>
+            <p style='color:#8b9099; font-size:0.82rem; margin:0.3rem 0 0.8rem;'>
+                Las ventas brutas pueden ser menores en patrocinados por <b>sesgo de selección</b>:
+                se patrocinan productos con poca tracción orgánica, no al revés.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if aviso_sp:
+            st.markdown(aviso_sp, unsafe_allow_html=True)
+
+        st.markdown(f"""
+        <div style="display:flex; gap:1rem; margin-bottom:1.5rem;">
+            <div style="flex:1; background:#161b22; border:1px solid #21262d; border-radius:8px; padding:1.2rem; text-align:center;">
+                <div style="font-size:0.62rem; font-weight:600; letter-spacing:0.15em; text-transform:uppercase; color:#4a5260; margin-bottom:0.6rem;">
+                    Muestra
+                </div>
+                <div style="display:flex; justify-content:center; gap:1.5rem;">
+                    <div>
+                        <div style="font-family:'DM Mono',monospace; font-size:1.4rem; color:#c9933a;">{n_sp}</div>
+                        <div style="font-size:0.72rem; color:#8b9099;">Patrocinados</div>
+                    </div>
+                    <div style="color:#21262d; font-size:1.5rem;">|</div>
+                    <div>
+                        <div style="font-family:'DM Mono',monospace; font-size:1.4rem; color:#388bfd;">{n_org}</div>
+                        <div style="font-size:0.72rem; color:#8b9099;">Orgánicos</div>
+                    </div>
+                </div>
+            </div>
+            <div style="flex:1; background:#161b22; border:1px solid {color_r}33; border-radius:8px; padding:1.2rem; text-align:center;">
+                <div style="font-size:0.62rem; font-weight:600; letter-spacing:0.15em; text-transform:uppercase; color:#4a5260; margin-bottom:0.4rem;">
+                    Rating Medio ⭐
+                </div>
+                <div style="font-family:'DM Mono',monospace; font-size:1.8rem; color:{color_r};">
+                    {signo_r}{diff_rating:.2f}
+                </div>
+                <div style="font-size:0.75rem; color:#8b9099; margin-top:0.3rem;">
+                    {rating_sp:.2f} patrocinados vs {rating_org:.2f} orgánicos
+                </div>
+            </div>
+            <div style="flex:1; background:#161b22; border:1px solid {color_v}33; border-radius:8px; padding:1.2rem; text-align:center;">
+                <div style="font-size:0.62rem; font-weight:600; letter-spacing:0.15em; text-transform:uppercase; color:#4a5260; margin-bottom:0.4rem;">
+                    Ventas Medias / Mes
+                </div>
+                <div style="font-family:'DM Mono',monospace; font-size:1.8rem; color:{color_v};">
+                    {signo_v}{int(diff_ventas_sp)} uds
+                </div>
+                <div style="font-size:0.75rem; color:#8b9099; margin-top:0.3rem;">
+                    {int(ventas_sp)} patrocinados vs {int(ventas_org)} orgánicos
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
         if datos_comparacion:
-            fig3 = go.Figure()
-            
-            caracteristicas = [d['Característica'] for d in datos_comparacion]
-            precios_con = [d['Precio CON'] for d in datos_comparacion]
-            precios_sin = [d['Precio SIN'] for d in datos_comparacion]
-            
-            fig3.add_trace(go.Bar(
-                name='CON característica',
-                x=caracteristicas,
-                y=precios_con,
-                marker_color='#4CAF50',
-                text=[f"{p:.2f}€" for p in precios_con],
-                textposition='outside',
-            ))
-            
-            fig3.add_trace(go.Bar(
-                name='SIN característica',
-                x=caracteristicas,
-                y=precios_sin,
-                marker_color='#FF9800',
-                text=[f"{p:.2f}€" for p in precios_sin],
-                textposition='outside',
-            ))
-            
-            fig3.update_layout(
-                title='Precio Promedio: CON vs SIN Característica',
-                xaxis_title='Característica',
-                yaxis_title='Precio Promedio (€)',
-                barmode='group',
-                height=400,
-                **PLOTLY_DARK
+            labels       = [d['Característica'] for d in datos_comparacion]
+            diff_precios = [d['Diff Precio']    for d in datos_comparacion]
+            tienes_flags = [d['Tienes']         for d in datos_comparacion]
+
+            def bar_color(diff, tienes):
+                if diff >= 0:
+                    return '#c9933a' if tienes else '#388bfd'
+                else:
+                    return '#e5534b'
+
+            colores_precio = [bar_color(d, t) for d, t in zip(diff_precios, tienes_flags)]
+
+            # ── GRÁFICA 1: Impacto en Precio ──
+            st.markdown("""
+                <div style='margin: 2rem 0 0.4rem;'>
+                    <span style='font-family:"DM Mono",monospace; font-size:0.65rem; letter-spacing:0.18em;
+                                 text-transform:uppercase; color:#c9933a;'>Impacto en Precio</span>
+                    <p style='color:#8b9099; font-size:0.82rem; margin:0.2rem 0 0;'>
+                        Diferencia de precio medio entre productos <b>con</b> y <b>sin</b> cada característica
+                        en toda tu categoría.
+                        &nbsp;<span style='color:#c9933a;'>●</span> Ya lo tienes
+                        &nbsp;<span style='color:#388bfd;'>●</span> No lo tienes
+                        &nbsp;<span style='color:#e5534b;'>●</span> Penaliza
+                    </p>
+                </div>
+            """, unsafe_allow_html=True)
+
+            fig_precio = go.Figure()
+            fig_precio.add_vline(x=0, line_color='#4a5260', line_width=1)
+
+            for i, (lbl, val, color, tienes) in enumerate(zip(labels, diff_precios, colores_precio, tienes_flags)):
+                pct   = (val / datos_comparacion[i]['Precio SIN'] * 100) if datos_comparacion[i]['Precio SIN'] > 0 else 0
+                signo = '+' if val >= 0 else ''
+                text_label = f" {signo}{val:.2f}€ ({signo}{pct:.1f}%)"
+
+                fig_precio.add_trace(go.Bar(
+                    x=[val], y=[lbl],
+                    orientation='h',
+                    marker=dict(color=color, opacity=0.85 if tienes else 0.55, line=dict(color=color, width=1.5)),
+                    text=[text_label],
+                    textposition='outside',
+                    textfont=dict(color=color, size=11, family='DM Mono'),
+                    width=0.5,
+                    showlegend=False,
+                    hovertemplate=(
+                        f"<b>{lbl}</b><br>"
+                        f"Diferencia: {signo}{val:.2f} €<br>"
+                        f"Variación: {signo}{pct:.1f}%<br>"
+                        f"{'✅ Ya activado' if tienes else '❌ No activado'}<extra></extra>"
+                    )
+                ))
+
+                if tienes:
+                    fig_precio.add_annotation(
+                        x=val, y=lbl, text=" ✓", showarrow=False,
+                        xanchor='left' if val >= 0 else 'right',
+                        font=dict(color='#c9933a', size=13)
+                    )
+
+            fig_precio.update_layout(**PLOTLY_DARK)
+            fig_precio.update_layout(
+                title='',
+                height=320,
+                barmode='overlay',
+                margin=dict(l=20, r=120, t=20, b=40),
+                plot_bgcolor='rgba(17,20,24,1)',
+                xaxis=dict(
+                    title='Diferencia de Precio (€)',
+                    gridcolor='#21262d', linecolor='#21262d',
+                    tickfont=dict(color='#4a5260'),
+                    zeroline=False,
+                ),
+                yaxis=dict(
+                    gridcolor='rgba(0,0,0,0)',
+                    linecolor='#21262d',
+                    tickfont=dict(color='#e8e6e1', size=12),
+                    autorange='reversed'
+                ),
             )
-            
-            st.plotly_chart(fig3, use_container_width=True)
-            
-            # Tabla de impacto
-            st.markdown("#### Impacto de Características")
-            
-            impacto_cols = st.columns(2)
-            
-            with impacto_cols[0]:
-                st.markdown("##### Impacto en Precio")
-                for dato in datos_comparacion:
-                    diff_pct = (dato['Diff Precio'] / dato['Precio SIN']) * 100 if dato['Precio SIN'] > 0 else 0
-                    tiene_marca = "✅" if dato['Tienes'] else "❌"
-                    
-                    if dato['Diff Precio'] > 0:
-                        st.success(f"{tiene_marca} **{dato['Característica']}**: +{dato['Diff Precio']:.2f}€ ({diff_pct:+.1f}%)")
-                    else:
-                        st.info(f"{tiene_marca} **{dato['Característica']}**: {dato['Diff Precio']:.2f}€ ({diff_pct:+.1f}%)")
-            
-            with impacto_cols[1]:
-                st.markdown("##### Impacto en Ventas")
-                for dato in datos_comparacion:
-                    diff_ventas_pct = (dato['Diff Ventas'] / dato['Ventas SIN']) * 100 if dato['Ventas SIN'] > 0 else 0
-                    tiene_marca = "✅" if dato['Tienes'] else "❌"
-                    
-                    if dato['Diff Ventas'] > 0:
-                        st.success(f"{tiene_marca} **{dato['Característica']}**: +{int(dato['Diff Ventas'])} ventas ({diff_ventas_pct:+.1f}%)")
-                    else:
-                        st.info(f"{tiene_marca} **{dato['Característica']}**: {int(dato['Diff Ventas'])} ventas ({diff_ventas_pct:+.1f}%)")
-            
-            # Recomendaciones
-            st.markdown("#### Recomendaciones")
-            caracteristicas_faltantes = [d for d in datos_comparacion if not d['Tienes'] and d['Diff Precio'] > 0]
-            
-            if caracteristicas_faltantes:
-                # Ordenar por impacto en precio
-                caracteristicas_faltantes.sort(key=lambda x: x['Diff Precio'], reverse=True)
-                
-                st.info(f"**Características que podrías activar:**")
-                for dato in caracteristicas_faltantes[:3]:  # Top 3
-                    st.markdown(f"- **{dato['Característica']}**: Podría aumentar tu precio en ~{dato['Diff Precio']:.2f}€ y ventas en ~{int(dato['Diff Ventas'])} unidades/mes")
-            else:
-                st.success("Tienes todas las características premium activadas.")
-        
+            st.plotly_chart(fig_precio, use_container_width=True)
+
+            # ── GRÁFICA 2: Impacto en Ventas ──
+            datos_ventas = [d for d in datos_comparacion if d['Diff Ventas'] is not None]
+
+            if datos_ventas:
+                st.markdown("""
+                    <div style='margin: 1.5rem 0 0.4rem;'>
+                        <span style='font-family:"DM Mono",monospace; font-size:0.65rem; letter-spacing:0.18em;
+                                     text-transform:uppercase; color:#388bfd;'>Impacto en Ventas / Mes</span>
+                        <p style='color:#8b9099; font-size:0.82rem; margin:0.2rem 0 0;'>
+                            Unidades adicionales vendidas al mes de media en productos <b>con</b> vs <b>sin</b>
+                            la característica. Cupón y Patrocinado se excluyen por sesgo de selección inversa.
+                        </p>
+                    </div>
+                """, unsafe_allow_html=True)
+
+                labels_v       = [d['Característica'] for d in datos_ventas]
+                diff_ventas_v  = [d['Diff Ventas']    for d in datos_ventas]
+                tienes_flags_v = [d['Tienes']         for d in datos_ventas]
+                colores_ventas = [bar_color(d, t) for d, t in zip(diff_ventas_v, tienes_flags_v)]
+
+                fig_ventas = go.Figure()
+                fig_ventas.add_vline(x=0, line_color='#4a5260', line_width=1)
+
+                for i, (lbl, val, color, tienes) in enumerate(zip(labels_v, diff_ventas_v, colores_ventas, tienes_flags_v)):
+                    pct   = (val / datos_ventas[i]['Ventas SIN'] * 100) if datos_ventas[i]['Ventas SIN'] > 0 else 0
+                    signo = '+' if val >= 0 else ''
+                    text_label = f" {signo}{int(val)} uds ({signo}{pct:.1f}%)"
+
+                    fig_ventas.add_trace(go.Bar(
+                        x=[val], y=[lbl],
+                        orientation='h',
+                        marker=dict(color=color, opacity=0.85 if tienes else 0.55, line=dict(color=color, width=1.5)),
+                        text=[text_label],
+                        textposition='outside',
+                        textfont=dict(color=color, size=11, family='DM Mono'),
+                        width=0.5,
+                        showlegend=False,
+                        hovertemplate=(
+                            f"<b>{lbl}</b><br>"
+                            f"Diferencia: {signo}{int(val)} uds/mes<br>"
+                            f"Variación: {signo}{pct:.1f}%<br>"
+                            f"{'✅ Ya activado' if tienes else '❌ No activado'}<extra></extra>"
+                        )
+                    ))
+
+                    if tienes:
+                        fig_ventas.add_annotation(
+                            x=val, y=lbl, text=" ✓", showarrow=False,
+                            xanchor='left' if val >= 0 else 'right',
+                            font=dict(color='#c9933a', size=13)
+                        )
+
+                fig_ventas.update_layout(**PLOTLY_DARK)
+                fig_ventas.update_layout(
+                    title='',
+                    height=300,
+                    barmode='overlay',
+                    margin=dict(l=20, r=140, t=20, b=40),
+                    plot_bgcolor='rgba(17,20,24,1)',
+                    xaxis=dict(
+                        title='Diferencia de Ventas (uds/mes)',
+                        gridcolor='#21262d', linecolor='#21262d',
+                        tickfont=dict(color='#4a5260'),
+                        zeroline=False,
+                    ),
+                    yaxis=dict(
+                        gridcolor='rgba(0,0,0,0)',
+                        linecolor='#21262d',
+                        tickfont=dict(color='#e8e6e1', size=12),
+                        autorange='reversed'
+                    ),
+                )
+                st.plotly_chart(fig_ventas, use_container_width=True)
+
         st.markdown("---")
         
         # ========== SECCIÓN 4: DIAGNÓSTICO DE SALUD ==========
