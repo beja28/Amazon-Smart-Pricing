@@ -1588,8 +1588,14 @@ if st.session_state.producto_seleccionado_idx is not None:
             )
         
         # ========== SECCIÓN 3: ¿QUÉ HACE LA DIFERENCIA? ==========
-        st.markdown('<span class="section-heading-num">03</span><div class="section-heading">¿Qué Hace la Diferencia?</div>', unsafe_allow_html=True)
-        st.caption("Impacto real de cada característica en tu categoría")
+        st.markdown(f'''
+            <div class="section-label" style="color: #ffffff; font-size: 0.85rem; margin-top: 2.5rem;">
+                ¿Qué Hace la Diferencia?
+            </div>
+            <p style="font-size:0.8rem;color:#8b9099;margin-bottom:1.5rem;">
+                Impacto real de cada característica en tu categoría
+            </p>
+        ''', unsafe_allow_html=True)
         
         caracteristicas_analisis = {
             'Best Seller': ('is_best_seller', 'Best Seller'),
@@ -1876,11 +1882,16 @@ if st.session_state.producto_seleccionado_idx is not None:
                 )
                 st.plotly_chart(fig_ventas, use_container_width=True)
 
-        st.markdown("---")
         
         # ========== SECCIÓN 4: DIAGNÓSTICO DE SALUD ==========
-        st.markdown('<span class="section-heading-num">04</span><div class="section-heading">Diagnóstico de Salud</div>', unsafe_allow_html=True)
-        st.caption("¿Cómo está mi producto?")
+        st.markdown('''
+            <div class="section-label" style="color: #ffffff; font-size: 0.85rem; margin-top: 2.5rem;">
+                Diagnóstico de Salud
+            </div>
+            <p style="font-size:0.8rem;color:#8b9099;margin-bottom:1.5rem;">
+                ¿Cómo está mi producto?
+            </p>
+        ''', unsafe_allow_html=True)
         
         # 1. OBTENER RIVALES DIRECTOS (KNN) para un análisis hiper-segmentado
         vectorizer, knn_model, df_knn = get_knn_engine(df)
