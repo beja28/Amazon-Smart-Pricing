@@ -631,7 +631,7 @@ st.markdown("""
             <p class="dash-header-sub">Intelligence Dashboard · Amazon Marketplace</p>
             <h1 class="dash-header-title">Smart <span>Pricing</span></h1>
         </div>
-        <div class="dash-header-version">v3.0 · ML ENGINE</div>
+        <div class="dash-header-version">v3.0 · APO ENGINE</div>
     </div>
 """, unsafe_allow_html=True)
 
