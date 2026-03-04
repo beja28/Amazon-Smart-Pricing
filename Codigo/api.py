@@ -1,6 +1,7 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Security, Depends
+from fastapi.security.api_key import APIKeyHeader
 from contextlib import asynccontextmanager
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, Any, Dict
 import numpy as np
 import pandas as pd
@@ -8,20 +9,34 @@ from catboost import CatBoostRegressor
 import lightgbm as lgb
 import pickle
 import os
+import logging
 import json
+import time
 from corrector_precio import CorrectorPorSimilitud 
 
-# ---------------------------------------------------------------------------
-# CONFIGURACIÓN DE RUTAS Y PESOS
-# ---------------------------------------------------------------------------
-# Directorio ÚNICO donde están todos los modelos
+# Configuración de Monitorización (Logging)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] - %(message)s",
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger(__name__)
+
+# Configuración de Seguridad
+API_KEY = "tfm-mioti-2026-key"
+api_key_header = APIKeyHeader(name="X-API-KEY", auto_error=True)
+
+async def get_api_key(api_key_header: str = Security(api_key_header)):
+    if api_key_header == API_KEY:
+        return api_key_header
+    raise HTTPException(status_code=403, detail="Acceso denegado. API Key inválida.")
+
 MODELS_DIR = "../Evaluaciones/Evaluacion_4/Entrenamiento_modelos/Modelos_produccion/"
 
-# Nombre exacto del archivo del modelo general (LightGBM)
 GENERAL_MODEL_FILENAME = "modelo_general_lightgbm_produccion.pkl" 
 
 # Diccionario de pesos: { "Nombre_Categoria": (Peso_General, Peso_Especifico) }
-# IMPORTANTE: La suma de los pesos debe ser 1.0
+# Para el blending
 CATEGORY_WEIGHTS = {
     "Office, Printing & Power": (1, 0),
     "Audio & Media Systems": (1, 0),
@@ -35,68 +50,60 @@ CATEGORY_WEIGHTS = {
     "Mobile Devices": (0.46, 0.54)
 }
 
-# ---------------------------------------------------------------------------
 # DICCIONARIO PARA ALMACENAR LOS MODELOS EN MEMORIA
-# ---------------------------------------------------------------------------
 models: Dict[str, Any] = {}
 corrector_api = None 
 
-# ---------------------------------------------------------------------------
-# GESTIÓN DEL CICLO DE VIDA (Lifespan)
-# ---------------------------------------------------------------------------
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global corrector_api
-    print("🚀 Iniciando API y cargando modelos en memoria...")
+    logger.info("Iniciando API y cargando modelos en memoria...")
     
     # Cargar el archivo de anclas estadísticas 
-    ruta_stats = "estadisticas_precio.json" # Ajusta si está en otra carpeta
+    # Usado para calibrar la prediccion devuelta por el modelo usando validacion knn para sacar sus competidores
+    ruta_stats = "estadisticas_precio.json"
     if os.path.exists(ruta_stats):
         with open(ruta_stats, 'r') as f:
             diccionario_estadisticas = json.load(f)
         corrector_api = CorrectorPorSimilitud('motor_similitud_titulos.pkl')
-        print(f"✅ Cerebro Estadístico cargado con {len(diccionario_estadisticas)} anclas.")
+        logger.info(f"Cargado con {len(diccionario_estadisticas)} anclas.")
     else:
-        print(f"⚠️ ADVERTENCIA: No se encontró '{ruta_stats}'. El post-procesamiento fallará.")
+        logger.warning(f"ADVERTENCIA: No se encontró '{ruta_stats}'. El post-procesamiento fallará.")
     
-    # 1. Cargar el Modelo General (LightGBM - .pkl)
+    # Cargar el Modelo General
     general_model_path = os.path.join(MODELS_DIR, GENERAL_MODEL_FILENAME)
     if not os.path.exists(general_model_path):
-        raise FileNotFoundError(f"❌ Modelo general no encontrado en: {general_model_path}")
+        raise FileNotFoundError(f"Modelo general no encontrado en: {general_model_path}")
     
     with open(general_model_path, 'rb') as f:
         models["general"] = pickle.load(f)
-    print(f"✅ Modelo General (LightGBM) cargado exitosamente.")
+    logger.info(f"Modelo General (LightGBM) cargado exitosamente.")
 
-    # 2. Cargar los Modelos por Categoría (CatBoost - .cbm)
+    # Cargar los Modelos por Categoría 
     if os.path.exists(MODELS_DIR):
         for file in os.listdir(MODELS_DIR):
             if file.endswith(".cbm"):
-                # Asumimos que los archivos se llaman "model_{Categoria}_ALIGNED.cbm"
+                # los archivos se llaman "model_{Categoria}_ALIGNED.cbm"
                 cat_name = file.replace(".cbm", "")
                 
                 cat_model = CatBoostRegressor()
                 cat_model.load_model(os.path.join(MODELS_DIR, file))
                 models[cat_name] = cat_model
-                print(f"✅ Modelo Categórico (CatBoost) cargado: {cat_name}")
+                logger.info(f"Modelo Categórico (CatBoost) cargado: {cat_name}")
     else:
-        print(f"⚠️ Directorio de modelos no encontrado: {MODELS_DIR}")
+        logger.error(f"Directorio de modelos no encontrado: {MODELS_DIR}")
 
     yield 
     
-    print("🛑 Apagando API y liberando memoria...")
+    logger.info("Apagando API y liberando memoria...")
     models.clear()
 
-app = FastAPI(title="Amazon Smart Pricing API - HETEROGENEOUS BLENDING", version="7.0", lifespan=lifespan)
+app = FastAPI(title="Amazon Smart Pricing API - BLENDING", version="7.0", lifespan=lifespan)
 
 
-# ---------------------------------------------------------------------------
 # COLUMNAS NUMÉRICAS — las que NO son categóricas en el entrenamiento
-# Las categóricas vacías deben ser "" (string vacío)
-# Las numéricas vacías deben ser np.nan
-# ---------------------------------------------------------------------------
 NUMERIC_COLS = {
-    # Specs técnicas
     "confidence", "ppm", "pack_count", "ups_capacity_value", "rack_u",
     "power_capacity_value", "total_power_w", "dpi", "read_speed_mbs",
     "node_count", "multi_gig_ports", "screen_size_in", "refresh_rate_hz",
@@ -113,11 +120,9 @@ NUMERIC_COLS = {
 }
 
 
-# ---------------------------------------------------------------------------
 # CONTRATO DE DATOS — data_dashboard.csv sin original_title,
 # product_image_url, log_original_price y columnas derivadas del dashboard.
 # Specs técnicos como Optional[Any] porque mezclan bool/str/float/None.
-# ---------------------------------------------------------------------------
 class ProductInput(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
@@ -228,37 +233,41 @@ class ProductInput(BaseModel):
     original_title:       Optional[str] = ""
     
     # --- Features de comportamiento (tipos fijos) ---
-    product_rating:           float
+    product_rating:           float = Field(..., ge=0, le=5)
     is_best_seller:           str
     is_sponsored:             str
     buy_box_availability:     int
     sustainability_tags:      int
     has_coupon:               int
-    discount_percentage:      float
+    discount_percentage:      float = Field(default=0, ge=0, le=100)
     log_purchased_last_month: float
     log_total_reviews:        float
 
-
-# ---------------------------------------------------------------------------
-# FUNCIONES DE PREPARACIÓN DE DATOS (DOS TUBERÍAS DISTINTAS)
-# ---------------------------------------------------------------------------
+    @field_validator('category')
+    @classmethod
+    def check_category_exists(cls, v):
+        if v not in CATEGORY_WEIGHTS and v != "general":
+            logger.warning(f"Categoría '{v}' no tiene pesos asignados. Se usará predicción general.")
+        return v
+    
+    
+# FUNCIONES DE PREPARACIÓN DE DATOS
 
 def prepare_for_lightgbm(row, model_instance):
-    # 1. Crear DataFrame
     df = pd.DataFrame([row])
     
-    # 2. Recuperar el orden exacto de features del modelo
+    # Recuperar el orden exacto de features del modelo
     features = model_instance.feature_name_
     
-    # 3. Asegurar que todas las columnas existen (si no, poner NaN)
+    # Asegurar que todas las columnas existen (si no, poner NaN)
     for col in features:
         if col not in df.columns:
             df[col] = np.nan
             
-    # 4. Reordenar columnas para que coincidan con el entrenamiento
+    # Reordenar columnas para que coincidan con el entrenamiento
     df = df[features]
     
-    # 5. CASTING DE TIPOS (Aquí es donde estaba el error)
+    # 5. CASTING DE TIPOS
     for col in df.columns:
         if col in NUMERIC_COLS:
             # Forzar a float para que LightGBM lo vea como numérico
@@ -283,7 +292,7 @@ def prepare_for_catboost(row_dict: dict, model_instance: CatBoostRegressor) -> p
             
     df = df[features] # Orden exacto
     
-    # Lógica de CatBoost: Nulos categóricos a "Missing" y tipo str
+    # Nulos categóricos a "Missing" y tipo str
     for col in df.columns:
         if col in NUMERIC_COLS:
             df[col] = pd.to_numeric(df[col], errors="coerce")
@@ -295,9 +304,7 @@ def prepare_for_catboost(row_dict: dict, model_instance: CatBoostRegressor) -> p
     return df
 
 
-# ---------------------------------------------------------------------------
 # ENDPOINTS
-# ---------------------------------------------------------------------------
 @app.get("/")
 def root():
     return {"status": "online", "models_loaded": list(models.keys()), "version": "7.0"}
@@ -308,6 +315,7 @@ def health():
     Chequeo del estado de la API y de los modelos cargados en memoria.
     """
     if "general" not in models:
+        logger.error("Health check fallido: Modelo general no cargado.")
         raise HTTPException(status_code=503, detail="Modelo general no cargado. La API no puede operar.")
     
     # Extraemos qué categorías tienen su modelo específico cargado
@@ -321,7 +329,7 @@ def health():
     }
 
 
-@app.get("/model/features")
+@app.get("/model/features", dependencies=[Depends(get_api_key)])
 def get_features(category: Optional[str] = None):
     """
     Devuelve las features que espera un modelo específico.
@@ -339,15 +347,15 @@ def get_features(category: Optional[str] = None):
 
     model_instance = models[target_model_name]
     
-    # 1. Caso Modelo General (LightGBM)
+    # 1. Caso Modelo General
     if target_model_name == "general":
-        features = model_instance.feature_name_  # Ojo: sin 's' al final en LGBM
+        features = model_instance.feature_name_  
         motor = "LightGBM"
         info_extra = "Features completas del modelo global."
         
-    # 2. Caso Modelo por Categoría (CatBoost)
+    # 2. Caso Modelo por Categoría
     else:
-        features = model_instance.feature_names_ # Ojo: con 's' al final en CatBoost
+        features = model_instance.feature_names_
         motor = "CatBoost"
         info_extra = "Features pre-filtradas durante el entrenamiento (Threshold aplicado)."
 
@@ -360,9 +368,13 @@ def get_features(category: Optional[str] = None):
     }
 
 
-@app.post("/predict")
+@app.post("/predict", dependencies=[Depends(get_api_key)])
 def predict_price(product: ProductInput):
+    start_time = time.time()
+    logger.info(f"Petición recibida: Categoría '{product.category}', Título '{product.original_title}'")
+    
     if "general" not in models:
+        logger.error("Modelo general no disponible para predicción.")
         raise HTTPException(status_code=503, detail="Modelo general no disponible.")
 
     try:
@@ -372,18 +384,18 @@ def predict_price(product: ProductInput):
 
         categoria_producto = product.category
 
-        # 1. PREDICCIÓN MODELO GENERAL (LightGBM)
+        # PREDICCIÓN MODELO GENERAL
         df_general = prepare_for_lightgbm(row, models["general"])
         
         log_pred_general = float(models["general"].predict(df_general)[0])
 
-        # 2. LÓGICA DE BLENDING
+        # LÓGICA DE BLENDING
         peso_general = 1.0
         peso_especifico = 0.0
         log_pred_especifico = 0.0
         modelo_usado = "Solo_General_(LightGBM)"
 
-        # 3. PREDICCIÓN MODELO CATEGORÍA (CatBoost) - Si existe
+        # 3. PREDICCIÓN MODELO CATEGORÍA
         if categoria_producto in models and categoria_producto in CATEGORY_WEIGHTS:
             peso_general, peso_especifico = CATEGORY_WEIGHTS[categoria_producto]
             
@@ -391,11 +403,11 @@ def predict_price(product: ProductInput):
             log_pred_especifico = float(models[categoria_producto].predict(df_especifico)[0])
             modelo_usado = f"Blending_General(LGBM)+Especifico_{categoria_producto}(CatBoost)"
 
-        # 4. ENSAMBLADO MATEMÁTICO (Modelos puros)
+        # ENSAMBLADO MATEMÁTICO
         log_pred_modelos = (log_pred_general * peso_general) + (log_pred_especifico * peso_especifico)
         precio_modelos_eur = float(np.expm1(log_pred_modelos))
 
-        # 5. POST-PROCESAMIENTO: Corrector por Similitud Textual
+        # POST-PROCESAMIENTO: Corrector por Similitud Textual
         log_final_corregido = log_pred_modelos
         motivo_correccion = "Corrector no inicializado"
         
@@ -404,14 +416,18 @@ def predict_price(product: ProductInput):
                 # El corrector buscará el 'original_title' dentro de 'row'
                 log_final_corregido, motivo_correccion = corrector_api.corregir_prediccion(log_pred_modelos, row)
             except Exception as e:
-                print(f"⚠️ Error en corrector: {e}")
+                logger.error(f"Error en corrector: {e}")
                 motivo_correccion = "Error en corrección (Se usa modelo puro)"
 
-        # 6. TRANSFORMACIÓN FINAL A EUROS (Ya con el precio corregido)
+        # TRANSFORMACIÓN FINAL A EUROS (Ya con el precio corregido)
         precio_final_eur = float(np.expm1(log_final_corregido))
         diferencia_log = log_final_corregido - log_pred_modelos
+        
+        end_time = time.time()
+        latency = end_time - start_time
+        logger.info(f"Predicción completada en {latency:.4f}s. Precio final: {round(precio_final_eur, 2)}€")
 
-        # 7. RESPUESTA JSON ENRIQUECIDA
+        # RESPUESTA JSON ENRIQUECIDA
         return {
             "predicted_price": round(precio_final_eur, 2),
             "predicted_log_price": round(log_final_corregido, 4),
@@ -433,10 +449,11 @@ def predict_price(product: ProductInput):
                 "log_difference": round(diferencia_log, 4)
             },
             
-            "status": "success"
+            "status": "success",
+            "latency_seconds": round(latency, 4)
         }
 
     except Exception as e:
         import traceback
-        print(traceback.format_exc())
+        logger.error(f"Error crítico en predicción: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Error en predicción: {str(e)}")

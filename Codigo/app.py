@@ -16,6 +16,9 @@ import base64 # Asegúrate de que esto se importa
 API_URL = "http://127.0.0.1:8001/predict"
 DATASET_PATH = "../Datasets/evaluacion4_produccion.csv"
 TEST_SAMPLES_PATH = "dashboard_test_samples.csv"
+HEADERS = {
+    "X-API-KEY": "tfm-mioti-2026-key" 
+}
 
 st.set_page_config(page_title="Amazon Price Optimizer", layout="wide", initial_sidebar_state="collapsed")
 
@@ -2098,7 +2101,7 @@ if st.session_state.producto_seleccionado_idx is not None:
 
             with st.spinner("Analizando mercado y competencia..."):
                 try:
-                    response = requests.post(API_URL, json=payload, timeout=15)
+                    response = requests.post(API_URL, json=payload, headers=HEADERS, timeout=15)
 
                     if response.status_code == 200:
                         data_api = response.json()
